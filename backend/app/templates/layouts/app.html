@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block body %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<!-- Sidebar + Main layout -->
+<div class="d-flex" id="app-wrapper">
+    <!-- Sidebar -->
+    {% include "partials/sidebar.html" %}
+
+    <!-- Main content -->
+    <div class="flex-grow-1 main-content" id="main-content">
+        <!-- Top bar -->
+        {% include "partials/topbar.html" %}
+
+        <!-- Flash messages -->
+        <div class="container-fluid px-4 mt-3">
+            {% include "partials/flash_messages.html" %}
+        </div>
+
+        <!-- Page content -->
+        <main class="container-fluid px-4 py-3">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+{% endblock %}
+

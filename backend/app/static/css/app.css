@@ -1,0 +1,129 @@
+/* AI Social Publisher — Custom styles */
+
+:root {
+    --sidebar-width: 260px;
+    --sidebar-collapsed-width: 0px;
+    --topbar-height: 56px;
+}
+
+/* ==================== Sidebar ==================== */
+
+.sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    min-height: 100vh;
+    transition: transform 0.25s ease;
+    z-index: 1000;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Sidebar nav links */
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.45rem 0.75rem;
+    border-radius: 0.5rem;
+    color: #444;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.sidebar-link i {
+    font-size: 1.05rem;
+    min-width: 1.2rem;
+    text-align: center;
+}
+
+.sidebar-link:hover {
+    background-color: #f0f2ff;
+    color: #0d6efd;
+}
+
+.sidebar-link.active {
+    background-color: #e8eeff;
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+/* ==================== Main content ==================== */
+
+.main-content {
+    min-height: 100vh;
+    background-color: #f8f9fc;
+    overflow-x: hidden;
+}
+
+/* ==================== Top bar ==================== */
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 900;
+    height: var(--topbar-height);
+}
+
+/* ==================== Cards ==================== */
+
+.card {
+    border-radius: 0.75rem;
+}
+
+/* ==================== Responsive (mobile) ==================== */
+
+@media (max-width: 991.98px) {
+    #app-wrapper {
+        position: relative;
+    }
+
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        transform: translateX(-100%);
+        box-shadow: 0 0 20px rgba(0,0,0,0.15);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.3);
+        z-index: 999;
+    }
+
+    .sidebar-overlay.open {
+        display: block;
+    }
+}
+
+/* ==================== Utility ==================== */
+
+.avatar {
+    flex-shrink: 0;
+}
+
+.dropdown-menu-up {
+    bottom: 100%;
+    top: auto;
+    margin-bottom: 0.25rem;
+}
+
+/* ==================== Auth pages ==================== */
+
+@media (max-width: 575.98px) {
+    .card-body.p-4 {
+        padding: 1.25rem !important;
+    }
+}
+

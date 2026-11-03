@@ -1,0 +1,476 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">Create Post Content</h4>
+            <p class="text-muted small mb-0">Submit source material or craft a post from scratch with live preview.</p>
+        </div>
+        <a href="{{ url_for('web.posts') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i> Back to posts
+        </a>
+    </div>
+
+    <form method="POST" id="create-post-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="selected_media_id" id="selected-media-id" value="">
+
+        <div class="row g-4">
+            <!-- Left Panel: Source & Content Formulation -->
+            <div class="col-lg-7">
+                <!-- Source Selection Card -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3 pb-0">
+                        <h6 class="fw-semibold text-uppercase text-muted" style="font-size:0.75rem;letter-spacing:.06em;">1. Source Material</h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- Source Type Pills -->
+                        <ul class="nav nav-pills nav-fill gap-2 p-1 bg-light rounded-3 mb-3" role="tablist">
+                            <li class="nav-item">
+                                <button type="button" class="nav-link active py-2" id="pill-manual-tab" onclick="setSourceType('manual')">
+                                    <i class="bi bi-pencil-square me-1"></i> Manual Topic
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button type="button" class="nav-link py-2" id="pill-url-tab" onclick="setSourceType('url')">
+                                    <i class="bi bi-link-45deg me-1"></i> URL / Trending
+                                </button>
+                            </li>
+                            <li class="nav-item">
+                                <button type="button" class="nav-link py-2" id="pill-image-tab" onclick="setSourceType('image_upload')">
+                                    <i class="bi bi-image me-1"></i> Image First
+                                </button>
+                            </li>
+                        </ul>
+                        <input type="hidden" name="source_type" id="source-type-input" value="manual">
+
+                        <!-- Manual Fields -->
+                        <div id="source-manual-fields">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold small">Headline / Topic Title</label>
+                                <input type="text" name="headline" id="source-headline" class="form-control" placeholder="e.g. 5 Strategies to Boost Organic Reach in 2026" oninput="syncPreview()">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold small">Key Talking Points or Raw Text</label>
+                                <textarea name="raw_text" id="source-raw-text" class="form-control" rows="3" placeholder="Paste notes, bullet points, or reference facts..." oninput="syncPreview()"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- URL Fields -->
+                        <div id="source-url-fields" style="display:none;">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold small">Article or Trending Post URL</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-globe"></i></span>
+                                    <input type="url" name="source_url" id="source-url" class="form-control" placeholder="https://example.com/industry-news">
+                                </div>
+                                <div class="form-text small text-muted">
+                                    <i class="bi bi-shield-check text-success me-1"></i> Protected by SSRF validation (internal networks blocked).
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Image Tab Note -->
+                        <div id="source-image-fields" style="display:none;">
+                            <div class="alert alert-light border small">
+                                <i class="bi bi-info-circle me-1 text-primary"></i> Choose an image from the Media Library below to build a visual-first post.
+                            </div>
+                        </div>
+
+                        <!-- AI Writing Instructions / Tone -->
+                        <div class="row g-2 align-items-center">
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold small mb-1">Tone & Voice</label>
+                                <select name="tone_instruction" class="form-select form-select-sm">
+                                    <option value="professional">Professional & Authoritative</option>
+                                    <option value="engaging" selected>Engaging & Conversational</option>
+                                    <option value="playful">Playful & Enthusiastic</option>
+                                    <option value="informative">Educational & Informative</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Media Attachment Selector -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+                        <h6 class="fw-semibold text-uppercase text-muted mb-0" style="font-size:0.75rem;letter-spacing:.06em;">2. Visual Asset</h6>
+                        <a href="{{ url_for('web.media') }}" target="_blank" class="small text-primary text-decoration-none">
+                            <i class="bi bi-folder-plus me-1"></i> Manage Media
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        {% if media_assets %}
+                        <div class="d-flex gap-2 overflow-x-auto pb-2" style="max-height: 140px;">
+                            <!-- None option -->
+                            <div class="media-thumb-select p-1 border rounded-3 text-center cursor-pointer active" id="thumb-none" onclick="selectMedia('', '')" style="min-width: 90px; height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <i class="bi bi-slash-circle text-muted fs-4"></i>
+                                <span class="small text-muted" style="font-size: 0.7rem;">No image</span>
+                            </div>
+                            {% for asset in media_assets %}
+                            <div class="media-thumb-select p-1 border rounded-3 position-relative cursor-pointer" id="thumb-{{ asset.id }}" onclick="selectMedia('{{ asset.id }}', '{{ asset.storage_url }}')" style="min-width: 90px; height: 90px;">
+                                <img src="{{ asset.storage_url }}" alt="{{ asset.original_filename }}" class="rounded-2 w-100 h-100 object-fit-cover">
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-3 border border-dashed rounded-3">
+                            <i class="bi bi-cloud-arrow-up text-muted fs-3"></i>
+                            <div class="small text-muted mt-1">No media in library yet.</div>
+                            <a href="{{ url_for('web.media') }}" class="btn btn-sm btn-outline-primary mt-2">Upload images to library</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Post Caption Formulation -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-transparent border-0 pt-3 pb-0">
+                        <h6 class="fw-semibold text-uppercase text-muted" style="font-size:0.75rem;letter-spacing:.06em;">3. Post Content</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Post Caption</label>
+                            <textarea name="caption" id="post-caption" class="form-control" rows="5" placeholder="Write or let AI draft your post caption here..." oninput="syncPreview()"></textarea>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted small" id="caption-counter">0 characters</span>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-light" onclick="insertTag('#SocialMedia')">#SocialMedia</button>
+                                <button type="button" class="btn btn-sm btn-light" onclick="insertTag('#Marketing')">#Marketing</button>
+                                <button type="button" class="btn btn-sm btn-light" onclick="insertTag('#Growth')">#Growth</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-primary btn-lg px-4 shadow-sm" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); border: none;" onclick="triggerAIGeneration()">
+                        <i class="bi bi-stars me-1 text-warning"></i> Generate with AI
+                    </button>
+                    <button type="submit" class="btn btn-outline-secondary btn-lg px-4">
+                        <i class="bi bi-save me-1"></i> Save Draft
+                    </button>
+                    <a href="{{ url_for('web.posts') }}" class="btn btn-light btn-lg">Cancel</a>
+                </div>
+            </div>
+
+            <!-- Right Panel: Live Pixel-Perfect Social Media Preview -->
+            <div class="col-lg-5">
+                <div class="sticky-top" style="top: 76px;">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h6 class="fw-semibold mb-0">Pixel-Perfect Preview</h6>
+                        <!-- Platform preview toggle pills -->
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary active" id="preview-fb-btn" onclick="setPreviewPlatform('fb')">
+                                <i class="bi bi-facebook me-1"></i> Facebook
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="preview-ig-btn" onclick="setPreviewPlatform('ig')">
+                                <i class="bi bi-instagram me-1"></i> Instagram
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Facebook Feed Card Preview Mockup -->
+                    <div class="card border shadow-sm rounded-3 overflow-hidden bg-white" id="fb-preview-card">
+                        <!-- Feed Header -->
+                        <div class="p-3 d-flex align-items-center gap-2 border-bottom">
+                            <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:40px;height:40px;font-size:0.85rem;">
+                                {{ tenant.name[0].upper() }}
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold text-dark lh-sm" style="font-size:0.9rem;">{{ tenant.name }}</div>
+                                <div class="text-muted" style="font-size:0.75rem;">Just now · <i class="bi bi-globe"></i></div>
+                            </div>
+                            <button type="button" class="btn btn-sm text-muted p-0"><i class="bi bi-three-dots"></i></button>
+                        </div>
+
+                        <!-- Caption text -->
+                        <div class="p-3 pb-2 text-dark" id="fb-preview-text" style="font-size:0.9rem; white-space: pre-wrap;">
+                            Type your post caption on the left to preview it here...
+                        </div>
+
+                        <!-- Image Preview -->
+                        <div id="preview-image-container" style="display:none;" class="bg-light border-top border-bottom text-center">
+                            <img id="preview-image" src="" alt="Preview" class="img-fluid w-100" style="max-height: 380px; object-fit: cover;">
+                        </div>
+
+                        <!-- Reaction counts mockup -->
+                        <div class="px-3 py-2 d-flex justify-content-between text-muted border-top" style="font-size:0.78rem;">
+                            <span><i class="bi bi-hand-thumbs-up-fill text-primary"></i> 24</span>
+                            <span>4 comments · 2 shares</span>
+                        </div>
+
+                        <!-- Action Bar -->
+                        <div class="px-2 py-1 border-top d-flex justify-content-around text-muted">
+                            <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none py-1"><i class="bi bi-hand-thumbs-up me-1"></i> Like</button>
+                            <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none py-1"><i class="bi bi-chat me-1"></i> Comment</button>
+                            <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none py-1"><i class="bi bi-share me-1"></i> Share</button>
+                        </div>
+                    </div>
+
+                    <!-- Instagram Preview Card Mockup -->
+                    <div class="card border shadow-sm rounded-3 overflow-hidden bg-white" id="ig-preview-card" style="display:none;">
+                        <!-- IG Header -->
+                        <div class="p-3 d-flex align-items-center gap-2 border-bottom">
+                            <div class="rounded-circle p-0.5" style="background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); padding: 2px;">
+                                <div class="avatar bg-white rounded-circle d-flex align-items-center justify-content-center fw-bold text-dark" style="width:34px;height:34px;font-size:0.8rem;">
+                                    {{ tenant.name[0].upper() }}
+                                </div>
+                            </div>
+                            <div class="fw-bold text-dark lh-sm" style="font-size:0.85rem;">{{ tenant.slug }}</div>
+                            <button type="button" class="btn btn-sm text-muted ms-auto p-0"><i class="bi bi-three-dots"></i></button>
+                        </div>
+
+                        <!-- IG Media -->
+                        <div id="ig-image-container" class="bg-light text-center" style="min-height: 260px; display: flex; align-items: center; justify-content: center;">
+                            <img id="ig-preview-image" src="" alt="IG Preview" class="img-fluid w-100" style="display:none; max-height: 400px; object-fit: cover;">
+                            <span id="ig-placeholder-text" class="text-muted small">Select an image to preview Instagram post</span>
+                        </div>
+
+                        <!-- IG Action icons -->
+                        <div class="p-3 pb-1 d-flex gap-3 text-dark fs-5">
+                            <i class="bi bi-heart cursor-pointer"></i>
+                            <i class="bi bi-chat cursor-pointer"></i>
+                            <i class="bi bi-send cursor-pointer"></i>
+                            <i class="bi bi-bookmark ms-auto cursor-pointer"></i>
+                        </div>
+
+                        <!-- IG Caption -->
+                        <div class="px-3 pb-3 pt-1 text-dark" style="font-size:0.85rem;">
+                            <span class="fw-bold me-1">{{ tenant.slug }}</span>
+                            <span id="ig-preview-text">Type your post caption on the left...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+.cursor-pointer { cursor: pointer; }
+.media-thumb-select { transition: all 0.15s ease; }
+.media-thumb-select:hover { border-color: #0d6efd !important; }
+.media-thumb-select.active { border-color: #0d6efd !important; box-shadow: 0 0 0 2px rgba(13,110,253,0.3); }
+</style>
+
+<script>
+function setSourceType(type) {
+    document.getElementById('source-type-input').value = type;
+    document.querySelectorAll('#create-post-form .nav-pills .nav-link').forEach(btn => btn.classList.remove('active'));
+    
+    document.getElementById('source-manual-fields').style.display = type === 'manual' ? 'block' : 'none';
+    document.getElementById('source-url-fields').style.display = type === 'url' ? 'block' : 'none';
+    document.getElementById('source-image-fields').style.display = type === 'image_upload' ? 'block' : 'none';
+
+    if (type === 'manual') document.getElementById('pill-manual-tab').classList.add('active');
+    if (type === 'url') document.getElementById('pill-url-tab').classList.add('active');
+    if (type === 'image_upload') document.getElementById('pill-image-tab').classList.add('active');
+}
+
+function selectMedia(mediaId, mediaUrl) {
+    document.getElementById('selected-media-id').value = mediaId;
+    document.querySelectorAll('.media-thumb-select').forEach(el => el.classList.remove('active'));
+    
+    const activeEl = mediaId ? document.getElementById('thumb-' + mediaId) : document.getElementById('thumb-none');
+    if (activeEl) activeEl.classList.add('active');
+
+    const fbContainer = document.getElementById('preview-image-container');
+    const fbImg = document.getElementById('preview-image');
+    const igImg = document.getElementById('ig-preview-image');
+    const igPlaceholder = document.getElementById('ig-placeholder-text');
+
+    if (mediaUrl) {
+        fbImg.src = mediaUrl;
+        fbContainer.style.display = 'block';
+        igImg.src = mediaUrl;
+        igImg.style.display = 'block';
+        if (igPlaceholder) igPlaceholder.style.display = 'none';
+    } else {
+        fbContainer.style.display = 'none';
+        fbImg.src = '';
+        igImg.style.display = 'none';
+        igImg.src = '';
+        if (igPlaceholder) igPlaceholder.style.display = 'block';
+    }
+}
+
+function setPreviewPlatform(platform) {
+    const fbBtn = document.getElementById('preview-fb-btn');
+    const igBtn = document.getElementById('preview-ig-btn');
+    const fbCard = document.getElementById('fb-preview-card');
+    const igCard = document.getElementById('ig-preview-card');
+
+    if (platform === 'fb') {
+        fbBtn.classList.add('active');
+        igBtn.classList.remove('active');
+        fbCard.style.display = 'block';
+        igCard.style.display = 'none';
+    } else {
+        igBtn.classList.add('active');
+        fbBtn.classList.remove('active');
+        fbCard.style.display = 'none';
+        igCard.style.display = 'block';
+    }
+}
+
+function syncPreview() {
+    const caption = document.getElementById('post-caption').value;
+    const headline = document.getElementById('source-headline').value;
+    const displayText = caption || headline || "Type your post caption on the left to preview it here...";
+    
+    document.getElementById('fb-preview-text').textContent = displayText;
+    document.getElementById('ig-preview-text').textContent = displayText;
+    document.getElementById('caption-counter').textContent = (caption.length) + " characters";
+}
+
+function insertTag(tag) {
+    const captionEl = document.getElementById('post-caption');
+    captionEl.value = (captionEl.value ? captionEl.value + ' ' : '') + tag;
+    syncPreview();
+}
+
+let pollInterval = null;
+
+function triggerAIGeneration() {
+    const headline = document.getElementById('source-headline').value.trim();
+    const rawText = document.getElementById('source-raw-text').value.trim();
+    const sourceUrl = document.getElementById('source-url').value.trim();
+    const caption = document.getElementById('post-caption').value.trim();
+
+    const topic = headline || caption || rawText || sourceUrl;
+    if (!topic) {
+        alert("Please provide a topic headline, notes, or article URL first so the AI knows what to research and create!");
+        document.getElementById('source-headline').focus();
+        return;
+    }
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('aiGenerationModal'), { backdrop: 'static', keyboard: false });
+    modal.show();
+
+    // Reset progress UI
+    updateProgressUI(10, "Initializing AI pipeline...", "Preparing context & workspace tokens...");
+
+    fetch('/api/v1/posts/generate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            topic: topic,
+            source_url: sourceUrl || null
+        })
+    })
+    .then(r => {
+        if (!r.ok) throw new Error("Generation request failed");
+        return r.json();
+    })
+    .then(data => {
+        const jobId = data.id;
+        pollGenerationJob(jobId);
+    })
+    .catch(err => {
+        console.error(err);
+        showGenerationError(err.message || "Failed to start generation");
+    });
+}
+
+function pollGenerationJob(jobId) {
+    if (pollInterval) clearInterval(pollInterval);
+
+    pollInterval = setInterval(() => {
+        fetch(`/api/v1/jobs/${jobId}`)
+        .then(r => r.json())
+        .then(job => {
+            if (job.status === 'processing' || job.status === 'pending') {
+                let stepLabel = "Synthesizing topic...";
+                let subLabel = "Running fact-check and citations...";
+
+                if (job.current_step === 'extracting_source') {
+                    stepLabel = "Extracting source data...";
+                    subLabel = "Analyzing input content and context...";
+                } else if (job.current_step === 'researching') {
+                    stepLabel = "Researching & Fact-checking...";
+                    subLabel = "Synthesizing market signals and citations...";
+                } else if (job.current_step === 'generating_caption') {
+                    stepLabel = "Writing engaging caption & hashtags...";
+                    subLabel = "Adapting brand voice and optimizing engagement hooks...";
+                } else if (job.current_step === 'generating_image') {
+                    stepLabel = "Generating branded social graphic...";
+                    subLabel = "Rendering high-resolution creative visual asset...";
+                }
+
+                updateProgressUI(job.progress_pct || 40, stepLabel, subLabel);
+            } else if (job.status === 'success') {
+                clearInterval(pollInterval);
+                updateProgressUI(100, "Generation complete! ✨", "Redirecting to post editor...");
+                setTimeout(() => {
+                    window.location.href = `/app/posts/${job.post_id}/edit`;
+                }, 800);
+            } else if (job.status === 'failed') {
+                clearInterval(pollInterval);
+                showGenerationError(job.error_message || "Generation encountered an unexpected error.");
+            }
+        })
+        .catch(err => {
+            console.error("Polling error:", err);
+        });
+    }, 800);
+}
+
+function updateProgressUI(pct, title, subtitle) {
+    const bar = document.getElementById('ai-progress-bar');
+    const titleEl = document.getElementById('ai-step-title');
+    const subEl = document.getElementById('ai-step-subtitle');
+
+    bar.style.width = pct + '%';
+    bar.setAttribute('aria-valuenow', pct);
+    titleEl.textContent = title;
+    subEl.textContent = subtitle;
+}
+
+function showGenerationError(msg) {
+    document.getElementById('ai-progress-container').style.display = 'none';
+    document.getElementById('ai-error-container').style.display = 'block';
+    document.getElementById('ai-error-message').textContent = msg;
+}
+</script>
+
+<!-- AI Generation Progress Modal -->
+<div class="modal fade" id="aiGenerationModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-body p-4 text-center">
+                <div id="ai-progress-container">
+                    <div class="spinner-grow text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 class="fw-bold mb-1" id="ai-step-title">Starting AI Generation...</h5>
+                    <p class="text-muted small mb-4" id="ai-step-subtitle">Synthesizing topic and verifying citations...</p>
+
+                    <div class="progress rounded-pill mb-3" style="height: 10px;">
+                        <div id="ai-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 15%"></div>
+                    </div>
+                    <div class="text-muted small" style="font-size: 0.75rem;">
+                        <i class="bi bi-shield-check text-success me-1"></i> Running with isolated tenant context & background worker
+                    </div>
+                </div>
+
+                <div id="ai-error-container" style="display:none;">
+                    <div class="text-danger mb-3">
+                        <i class="bi bi-exclamation-triangle-fill fs-1"></i>
+                    </div>
+                    <h5 class="fw-bold text-danger mb-2">Generation Failed</h5>
+                    <p class="text-muted small mb-4" id="ai-error-message"></p>
+                    <button type="button" class="btn btn-secondary px-4 rounded-pill" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

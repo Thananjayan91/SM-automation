@@ -1,0 +1,129 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+        <div>
+            <h4 class="fw-bold mb-1">Publishing History & Delivery Audit</h4>
+            <p class="text-muted small mb-0">Track real-time social publishing attempts, verify Meta delivery receipts, and retry failed posts.</p>
+        </div>
+        <div class="btn-group btn-group-sm rounded-pill p-1 bg-light border">
+            <a href="{{ url_for('web.publishing_history', status='all') }}" class="btn rounded-pill px-3 {% if current_status == 'all' %}btn-primary text-white{% else %}btn-light text-muted{% endif %}">
+                All Attempts
+            </a>
+            <a href="{{ url_for('web.publishing_history', status='success') }}" class="btn rounded-pill px-3 {% if current_status == 'success' %}btn-success text-white{% else %}btn-light text-muted{% endif %}">
+                <i class="bi bi-check-circle-fill me-1"></i> Succeeded
+            </a>
+            <a href="{{ url_for('web.publishing_history', status='failed') }}" class="btn rounded-pill px-3 {% if current_status == 'failed' %}btn-danger text-white{% else %}btn-light text-muted{% endif %}">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i> Failed
+            </a>
+        </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        {% if targets %}
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light small text-uppercase text-muted">
+                    <tr>
+                        <th class="ps-4">Target Destination</th>
+                        <th>Post Content</th>
+                        <th>Delivery Status</th>
+                        <th>Platform Post ID / Error</th>
+                        <th>Timestamp</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for target in targets %}
+                    <tr>
+                        <td class="ps-4 py-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar rounded-circle d-flex align-items-center justify-content-center text-white
+                                    {% if target.platform.value == 'facebook' %}bg-primary
+                                    {% elif target.platform.value == 'instagram' %}bg-danger
+                                    {% elif target.platform.value == 'tiktok' %}bg-dark
+                                    {% else %}bg-secondary{% endif %}" style="width:38px;height:38px;font-size:1rem;">
+                                    <i class="bi bi-{{ target.platform.value }}"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark">{{ target.social_account.display_name if target.social_account else target.platform.value.capitalize() }}</div>
+                                    <div class="text-muted small text-capitalize">{{ target.platform.value }} Page</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="max-width: 280px;">
+                            <div class="d-flex align-items-center gap-2">
+                                {% if target.post and target.post.media_links %}
+                                <img src="{{ target.post.media_links[0].media_asset.storage_url }}" alt="thumb" class="rounded border" style="width: 40px; height: 40px; object-fit: cover;">
+                                {% endif %}
+                                <div class="text-truncate text-dark small">
+                                    {{ target.post.caption if target.post else 'Untitled post' }}
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if target.status.value == 'success' %}
+                            <span class="badge bg-success bg-opacity-25 text-success rounded-pill px-3 py-1">
+                                <i class="bi bi-check-circle-fill me-1"></i> Published
+                            </span>
+                            {% elif target.status.value == 'failed' %}
+                            <span class="badge bg-danger bg-opacity-25 text-danger rounded-pill px-3 py-1">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i> Failed
+                            </span>
+                            {% else %}
+                            <span class="badge bg-warning bg-opacity-25 text-warning-emphasis rounded-pill px-3 py-1 text-uppercase">
+                                {{ target.status.value }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td style="max-width: 250px;">
+                            {% if target.status.value == 'success' and target.platform_post_id %}
+                            <code class="text-primary small bg-light px-2 py-1 rounded">{{ target.platform_post_id }}</code>
+                            {% elif target.error_message %}
+                            <div class="text-danger small text-truncate" title="{{ target.error_message }}">
+                                <i class="bi bi-info-circle me-1"></i> {{ target.error_message }}
+                            </div>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">
+                            {{ target.published_at.strftime('%b %d, %Y %I:%M %p UTC') if target.published_at else target.post.updated_at.strftime('%b %d, %Y') }}
+                        </td>
+                        <td class="text-end pe-4">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{{ url_for('web.edit_post', post_id=target.post_id) }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-pencil me-1"></i> Edit
+                                </a>
+                                {% if target.status.value == 'failed' %}
+                                <form method="POST" action="{{ url_for('web.retry_publish_post', post_id=target.post_id) }}" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-danger" title="Retry Delivery">
+                                        <i class="bi bi-arrow-clockwise me-1"></i> Retry
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="card-body text-center py-5">
+            <div class="avatar bg-light text-muted rounded-circle mx-auto d-flex align-items-center justify-content-center mb-3" style="width:64px;height:64px;">
+                <i class="bi bi-send-check fs-2 text-muted"></i>
+            </div>
+            <h6 class="fw-bold mb-1">No Delivery Logs Found</h6>
+            <p class="text-muted small mb-3">Posts published to connected social destinations will be logged here with official Meta receipts.</p>
+            <a href="{{ url_for('web.new_post') }}" class="btn btn-primary rounded-pill px-4">
+                <i class="bi bi-plus-lg me-1"></i> Create and Publish Post
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

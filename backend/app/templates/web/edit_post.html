@@ -1,0 +1,489 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <!-- Top Action Breadcrumb Bar -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between pb-3 mb-3 border-bottom gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <a href="{{ url_for('web.posts') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div>
+                <h5 class="fw-bold mb-0">Edit Post</h5>
+                <div class="text-muted small">
+                    Version <span class="badge bg-light text-dark border">v{{ post.content_version }}</span> · 
+                    Status: <span class="badge {% if post.status.value == 'approved' %}bg-success{% elif post.status.value == 'published' %}bg-primary{% else %}bg-secondary{% endif %} text-uppercase">{{ post.status.value }}</span>
+                    {% if post.approved_at %}
+                    · Approved by {{ post.approver.name if post.approver else 'Authorized member' }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <!-- AI Rewrite trigger -->
+            <button type="button" class="btn btn-outline-info" onclick="triggerPostRegenerate()">
+                <i class="bi bi-stars me-1"></i> AI Rewrite
+            </button>
+            <!-- Save Draft -->
+            <button type="button" class="btn btn-outline-secondary" onclick="submitEditForm('save')">
+                <i class="bi bi-save me-1"></i> Save Draft
+            </button>
+            <!-- Publish Now -->
+            <button type="button" class="btn btn-success px-3 fw-semibold shadow-sm" onclick="submitEditForm('publish')">
+                <i class="bi bi-send-fill me-1"></i> Publish Now
+            </button>
+        </div>
+    </div>
+
+    <!-- 3-Column Studio Layout -->
+    <form method="POST" id="edit-post-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="publish_action" id="publish-action-input" value="0">
+        <input type="hidden" name="approve_action" id="approve-action-input" value="0">
+
+        <div class="row g-3">
+            <!-- Column 1: Social Profiles Selector -->
+            <div class="col-xl-3 col-lg-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-transparent border-0 pt-3 pb-2">
+                        <h6 class="fw-bold mb-1">Social Profiles</h6>
+                        <p class="text-muted small mb-2">Select target destinations</p>
+                        <input type="text" class="form-control form-control-sm" id="search-profiles" placeholder="Filter connected profiles..." onkeyup="filterProfiles()">
+                    </div>
+                    <div class="card-body p-2 overflow-y-auto" style="max-height: 540px;" id="profiles-list">
+                        {% if social_accounts %}
+                            {% for account in social_accounts %}
+                            <label class="list-group-item d-flex align-items-center p-2 rounded-2 mb-1 border-0 cursor-pointer profile-item hover-bg">
+                                <input class="form-check-input me-3" type="checkbox" name="account_ids" value="{{ account.id }}" {% if account.id in current_account_ids %}checked{% endif %} onchange="syncSelectedChannels()">
+                                <div class="avatar rounded-circle d-flex align-items-center justify-content-center text-white me-2
+                                    {% if account.platform.value == 'facebook' %}bg-primary
+                                    {% elif account.platform.value == 'instagram' %}bg-danger
+                                    {% elif account.platform.value == 'tiktok' %}bg-dark
+                                    {% else %}bg-secondary{% endif %}" style="width:34px;height:34px;min-width:34px;font-size:0.85rem;">
+                                    <i class="bi bi-{{ account.platform.value }}"></i>
+                                </div>
+                                <div class="overflow-hidden">
+                                    <div class="fw-semibold text-truncate profile-name" style="font-size:0.85rem;">{{ account.display_name }}</div>
+                                    <div class="text-muted small text-truncate" style="font-size:0.75rem;">{{ account.account_handle or account.platform.value }}</div>
+                                </div>
+                            </label>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center py-4 text-muted small">
+                                <i class="bi bi-share fs-4 text-muted"></i>
+                                <div class="mt-2">No social accounts connected.</div>
+                                <a href="{{ url_for('web.settings_social_accounts') }}" class="btn btn-sm btn-link mt-1">Connect accounts</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 2: "Your Post" Editor -->
+            <div class="col-xl-5 col-lg-4">
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-transparent border-0 pt-3 pb-2 d-flex justify-content-between align-items-center">
+                        <h6 class="fw-bold mb-0">Your Post</h6>
+                        <span class="badge bg-light text-muted border" id="char-counter">0 chars</span>
+                    </div>
+                    <div class="card-body pt-0">
+                        <!-- Caption Textarea -->
+                        <div class="mb-3">
+                            <textarea name="caption" id="editor-caption" class="form-control" rows="8" placeholder="What would you like to share?" oninput="updateEditorPreview()">{{ post.caption or '' }}</textarea>
+                        </div>
+
+                        <!-- Hashtags Input -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small mb-1">Hashtags</label>
+                            <input type="text" name="hashtags" id="editor-hashtags" class="form-control form-control-sm" value="{{ (post.hashtags_json or [])|join(' ') }}" placeholder="#branding #growth #marketing" oninput="updateEditorPreview()">
+                        </div>
+
+                        <!-- Attached Media -->
+                        <div class="mb-3 border rounded-3 p-3 bg-light">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <label class="fw-semibold small mb-0"><i class="bi bi-image me-1"></i> Attached Media</label>
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#attachMediaModal">
+                                    <i class="bi bi-plus-lg me-1"></i> Attach / Replace
+                                </button>
+                            </div>
+
+                            <div id="attached-media-preview-area" class="d-flex gap-2 flex-wrap">
+                                {% if post.media_links %}
+                                    {% for ml in post.media_links %}
+                                    <div class="position-relative border rounded-2 overflow-hidden bg-white" style="width: 100px; height: 100px;" id="attached-box-{{ ml.media_asset.id }}">
+                                        <img src="{{ ml.media_asset.storage_url }}" alt="media" class="w-100 h-100 object-fit-cover">
+                                        <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 p-1 lh-1 m-1" onclick="removeAttachedMedia('{{ ml.media_asset.id }}')">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                        <input type="hidden" name="media_ids" value="{{ ml.media_asset.id }}">
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="text-muted small py-2" id="no-media-attached-msg">No image attached. Click "Attach / Replace" to add visuals.</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Platform-Specific Options: First comment -->
+                        <div class="border rounded-3 p-3 mb-3">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch" name="first_comment_enabled" id="firstCommentToggle" {% if post.first_comment_enabled %}checked{% endif %} onchange="toggleFirstComment(this.checked)">
+                                <label class="form-check-label fw-semibold small" for="firstCommentToggle">Publish First Comment</label>
+                            </div>
+                            <div id="first-comment-container" style="{% if not post.first_comment_enabled %}display:none;{% endif %}">
+                                <textarea name="first_comment" id="first-comment-text" class="form-control form-control-sm" rows="2" placeholder="Write additional links, sources, or hashtags as the first comment...">{{ post.first_comment or '' }}</textarea>
+                                <div class="form-text small text-muted">Automatically posted as the very first comment once your post is published.</div>
+                            </div>
+                        </div>
+
+                        <!-- Research Sources & Fact-Check Evidence -->
+                        {% if research_runs %}
+                        <div class="card border bg-light-subtle rounded-3 mb-3">
+                            <div class="card-header bg-transparent border-0 py-2 d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold small"><i class="bi bi-shield-check text-success me-1"></i> Research & Verified Sources</span>
+                                <span class="badge bg-secondary-subtle text-secondary small">{{ research_runs[0].citations|length }} sources</span>
+                            </div>
+                            <div class="card-body pt-0 small">
+                                <p class="text-muted mb-2 fst-italic">"{{ research_runs[0].summary }}"</p>
+                                <ul class="list-group list-group-flush rounded-2 border">
+                                    {% for cit in research_runs[0].citations %}
+                                    <li class="list-group-item bg-white py-2 px-3">
+                                        <div class="fw-semibold text-truncate">{{ cit.title }}</div>
+                                        <div class="text-muted small text-truncate">{{ cit.excerpt }}</div>
+                                        {% if cit.url %}
+                                        <a href="{{ cit.url }}" target="_blank" rel="noopener noreferrer" class="small text-primary text-decoration-none">
+                                            <i class="bi bi-box-arrow-up-right me-1"></i> Visit source
+                                        </a>
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Column 3: Live Social Media Preview -->
+            <div class="col-xl-4 col-lg-4">
+                <div class="sticky-top" style="top: 76px;">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h6 class="fw-semibold mb-0">Social Media Preview</h6>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary active" id="editor-fb-tab" onclick="switchEditorPreview('fb')">
+                                <i class="bi bi-facebook me-1"></i> Facebook
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" id="editor-ig-tab" onclick="switchEditorPreview('ig')">
+                                <i class="bi bi-instagram me-1"></i> Instagram
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Facebook Feed Card Preview Mockup -->
+                    <div class="card border shadow-sm rounded-3 overflow-hidden bg-white" id="live-fb-card">
+                        <div class="p-3 d-flex align-items-center gap-2 border-bottom">
+                            <div class="avatar bg-primary text-white rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:40px;height:40px;font-size:0.85rem;">
+                                {{ tenant.name[0].upper() }}
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-bold text-dark lh-sm" style="font-size:0.9rem;">{{ tenant.name }}</div>
+                                <div class="text-muted" style="font-size:0.75rem;">Now · <i class="bi bi-globe"></i></div>
+                            </div>
+                            <button type="button" class="btn btn-sm text-muted p-0"><i class="bi bi-three-dots"></i></button>
+                        </div>
+
+                        <!-- Caption & Hashtags -->
+                        <div class="p-3 pb-2 text-dark" id="live-fb-caption" style="font-size:0.9rem; white-space: pre-wrap;">{{ post.caption or 'Your post caption will appear here...' }}</div>
+
+                        <!-- Media Preview -->
+                        <div id="live-media-box" class="bg-light border-top border-bottom text-center" style="{% if not post.media_links %}display:none;{% endif %}">
+                            <img id="live-media-img" src="{% if post.media_links %}{{ post.media_links[0].media_asset.storage_url }}{% endif %}" alt="Media" class="img-fluid w-100" style="max-height: 380px; object-fit: cover;">
+                        </div>
+
+                        <!-- Likes/Comments line -->
+                        <div class="px-3 py-2 d-flex justify-content-between text-muted border-top" style="font-size:0.78rem;">
+                            <span><i class="bi bi-hand-thumbs-up-fill text-primary"></i> 48</span>
+                            <span>8 comments · 3 shares</span>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="px-2 py-1 border-top d-flex justify-content-around text-muted">
+                            <span class="btn btn-sm btn-link text-muted text-decoration-none py-1"><i class="bi bi-hand-thumbs-up me-1"></i> Like</span>
+                            <span class="btn btn-sm btn-link text-muted text-decoration-none py-1"><i class="bi bi-chat me-1"></i> Comment</span>
+                            <span class="btn btn-sm btn-link text-muted text-decoration-none py-1"><i class="bi bi-share me-1"></i> Share</span>
+                        </div>
+                    </div>
+
+                    <!-- Instagram Feed Card Preview Mockup -->
+                    <div class="card border shadow-sm rounded-3 overflow-hidden bg-white" id="live-ig-card" style="display:none;">
+                        <div class="p-3 d-flex align-items-center gap-2 border-bottom">
+                            <div class="rounded-circle p-0.5" style="background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); padding: 2px;">
+                                <div class="avatar bg-white rounded-circle d-flex align-items-center justify-content-center fw-bold text-dark" style="width:34px;height:34px;font-size:0.8rem;">
+                                    {{ tenant.name[0].upper() }}
+                                </div>
+                            </div>
+                            <div class="fw-bold text-dark lh-sm" style="font-size:0.85rem;">{{ tenant.slug }}</div>
+                            <i class="bi bi-three-dots ms-auto text-muted"></i>
+                        </div>
+
+                        <div id="live-ig-media-box" class="bg-light text-center" style="min-height: 280px; display: flex; align-items: center; justify-content: center;">
+                            <img id="live-ig-img" src="{% if post.media_links %}{{ post.media_links[0].media_asset.storage_url }}{% endif %}" alt="IG" class="img-fluid w-100" style="{% if not post.media_links %}display:none;{% endif %} max-height: 400px; object-fit: cover;">
+                            <span id="live-ig-placeholder" class="text-muted small" style="{% if post.media_links %}display:none;{% endif %}">Attach an image to preview Instagram post</span>
+                        </div>
+
+                        <div class="p-3 pb-1 d-flex gap-3 text-dark fs-5">
+                            <i class="bi bi-heart"></i>
+                            <i class="bi bi-chat"></i>
+                            <i class="bi bi-send"></i>
+                            <i class="bi bi-bookmark ms-auto"></i>
+                        </div>
+
+                        <div class="px-3 pb-3 pt-1 text-dark" style="font-size:0.85rem;">
+                            <span class="fw-bold me-1">{{ tenant.slug }}</span>
+                            <span id="live-ig-caption">{{ post.caption or 'Your caption will appear here...' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Modal to Attach Media from Tenant Library -->
+<div class="modal fade" id="attachMediaModal" tabindex="-1" aria-labelledby="attachMediaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title" id="attachMediaModalLabel">Select Media from Library</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% if media_assets %}
+                <div class="row g-2">
+                    {% for asset in media_assets %}
+                    <div class="col-md-3 col-sm-4 col-6">
+                        <div class="border rounded-2 p-1 position-relative cursor-pointer hover-shadow" onclick="addMediaAsset('{{ asset.id }}', '{{ asset.storage_url }}')">
+                            <img src="{{ asset.storage_url }}" alt="{{ asset.original_filename }}" class="rounded-1 w-100 object-fit-cover" style="height: 110px;">
+                            <div class="text-truncate small mt-1 text-dark" style="font-size: 0.72rem;">{{ asset.original_filename }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <p class="mb-2">No assets uploaded in this workspace yet.</p>
+                    <a href="{{ url_for('web.media') }}" target="_blank" class="btn btn-sm btn-primary">Go to Media Library</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.cursor-pointer { cursor: pointer; }
+.hover-bg:hover { background-color: #f8f9fa; }
+.hover-shadow:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+</style>
+
+<script>
+function submitEditForm(action) {
+    if (action === 'publish') {
+        const checkedProfiles = document.querySelectorAll('input[name="account_ids"]:checked');
+        if (checkedProfiles.length === 0) {
+            alert("Please select at least one connected social profile or page from the left panel before publishing.");
+            const searchInput = document.getElementById('search-profiles');
+            if (searchInput) searchInput.focus();
+            return;
+        }
+        if (!confirm("Are you ready to publish this post to " + checkedProfiles.length + " destination(s) now?")) {
+            return;
+        }
+        document.getElementById('publish-action-input').value = '1';
+        document.getElementById('approve-action-input').value = '1';
+    } else {
+        document.getElementById('publish-action-input').value = '0';
+        document.getElementById('approve-action-input').value = '0';
+    }
+    document.getElementById('edit-post-form').submit();
+}
+
+function updateEditorPreview() {
+    const caption = document.getElementById('editor-caption').value;
+    const hashtags = document.getElementById('editor-hashtags').value;
+    const fullText = (caption ? caption : '') + (hashtags ? '\n\n' + hashtags : '');
+    
+    const display = fullText.trim() || 'Your post caption will appear here...';
+    document.getElementById('live-fb-caption').textContent = display;
+    document.getElementById('live-ig-caption').textContent = display;
+    document.getElementById('char-counter').textContent = caption.length + ' chars';
+}
+
+function switchEditorPreview(platform) {
+    const fbBtn = document.getElementById('editor-fb-tab');
+    const igBtn = document.getElementById('editor-ig-tab');
+    const fbCard = document.getElementById('live-fb-card');
+    const igCard = document.getElementById('live-ig-card');
+
+    if (platform === 'fb') {
+        fbBtn.classList.add('active');
+        igBtn.classList.remove('active');
+        fbCard.style.display = 'block';
+        igCard.style.display = 'none';
+    } else {
+        igBtn.classList.add('active');
+        fbBtn.classList.remove('active');
+        fbCard.style.display = 'none';
+        igCard.style.display = 'block';
+    }
+}
+
+function toggleFirstComment(enabled) {
+    document.getElementById('first-comment-container').style.display = enabled ? 'block' : 'none';
+}
+
+function filterProfiles() {
+    const filter = document.getElementById('search-profiles').value.toLowerCase();
+    document.querySelectorAll('.profile-item').forEach(item => {
+        const name = item.querySelector('.profile-name').textContent.toLowerCase();
+        item.style.display = name.includes(filter) ? 'flex' : 'none';
+    });
+}
+
+function addMediaAsset(assetId, assetUrl) {
+    const area = document.getElementById('attached-media-preview-area');
+    const noMsg = document.getElementById('no-media-attached-msg');
+    if (noMsg) noMsg.style.display = 'none';
+
+    // Remove existing if already present
+    if (document.getElementById('attached-box-' + assetId)) return;
+
+    const div = document.createElement('div');
+    div.className = 'position-relative border rounded-2 overflow-hidden bg-white';
+    div.style.width = '100px';
+    div.style.height = '100px';
+    div.id = 'attached-box-' + assetId;
+    div.innerHTML = `
+        <img src="${assetUrl}" alt="media" class="w-100 h-100 object-fit-cover">
+        <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 p-1 lh-1 m-1" onclick="removeAttachedMedia('${assetId}')">
+            <i class="bi bi-x"></i>
+        </button>
+        <input type="hidden" name="media_ids" value="${assetId}">
+    `;
+    area.appendChild(div);
+
+    // Update live previews
+    const fbBox = document.getElementById('live-media-box');
+    const fbImg = document.getElementById('live-media-img');
+    const igBox = document.getElementById('live-ig-media-box');
+    const igImg = document.getElementById('live-ig-img');
+    const igPlaceholder = document.getElementById('live-ig-placeholder');
+
+    fbImg.src = assetUrl;
+    fbBox.style.display = 'block';
+    igImg.src = assetUrl;
+    igImg.style.display = 'block';
+    if (igPlaceholder) igPlaceholder.style.display = 'none';
+
+    // Dismiss modal
+    const modalEl = document.getElementById('attachMediaModal');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+}
+
+function removeAttachedMedia(assetId) {
+    const box = document.getElementById('attached-box-' + assetId);
+    if (box) box.remove();
+
+    const remaining = document.querySelectorAll('#attached-media-preview-area input[name="media_ids"]');
+    if (remaining.length === 0) {
+        const noMsg = document.getElementById('no-media-attached-msg');
+        if (noMsg) noMsg.style.display = 'block';
+        document.getElementById('live-media-box').style.display = 'none';
+        document.getElementById('live-media-img').src = '';
+        document.getElementById('live-ig-img').style.display = 'none';
+        document.getElementById('live-ig-img').src = '';
+        const igPlaceholder = document.getElementById('live-ig-placeholder');
+        if (igPlaceholder) igPlaceholder.style.display = 'block';
+    }
+}
+
+let editPollInterval = null;
+
+function triggerPostRegenerate() {
+    const caption = document.getElementById('editor-caption').value.trim();
+    if (!confirm("AI will generate a fresh caption and banner image based on your topic and sources. Continue?")) {
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('aiEditModal'), { backdrop: 'static', keyboard: false });
+    modal.show();
+
+    fetch('/api/v1/posts/generate', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({
+            post_id: '{{ post.id }}',
+            topic: caption || 'Social Media Update'
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        pollEditJob(data.id);
+    })
+    .catch(err => {
+        alert("Failed to start AI generation: " + err);
+    });
+}
+
+function pollEditJob(jobId) {
+    if (editPollInterval) clearInterval(editPollInterval);
+
+    editPollInterval = setInterval(() => {
+        fetch(`/api/v1/jobs/${jobId}`)
+        .then(r => r.json())
+        .then(job => {
+            if (job.status === 'processing' || job.status === 'pending') {
+                document.getElementById('ai-edit-bar').style.width = (job.progress_pct || 40) + '%';
+                document.getElementById('ai-edit-status').textContent = "Step: " + job.current_step.replace('_', ' ');
+            } else if (job.status === 'success') {
+                clearInterval(editPollInterval);
+                document.getElementById('ai-edit-bar').style.width = '100%';
+                document.getElementById('ai-edit-status').textContent = "Regeneration complete! Reloading...";
+                setTimeout(() => {
+                    window.location.reload();
+                }, 800);
+            } else if (job.status === 'failed') {
+                clearInterval(editPollInterval);
+                alert("AI Regeneration failed: " + (job.error_message || "Unknown error"));
+                const modalEl = document.getElementById('aiEditModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            }
+        });
+    }, 800);
+}
+
+document.addEventListener('DOMContentLoaded', updateEditorPreview);
+</script>
+
+<!-- AI Regeneration Modal -->
+<div class="modal fade" id="aiEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+            <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <h5 class="fw-bold mb-1">AI Enhancing Post...</h5>
+            <p class="text-muted small mb-3" id="ai-edit-status">Synthesizing topic and generating assets...</p>
+            <div class="progress rounded-pill mb-2" style="height: 8px;">
+                <div id="ai-edit-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 25%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

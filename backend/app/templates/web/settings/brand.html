@@ -1,0 +1,41 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent border-0">
+                <h5 class="fw-semibold mb-0">Brand settings</h5>
+                <p class="text-muted small mb-0">These settings guide AI-generated content tone and style.</p>
+            </div>
+            <div class="card-body">
+                {% include "partials/flash_messages.html" %}
+                <form method="POST" novalidate>
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        {{ form.brand_name.label(class="form-label fw-semibold") }}
+                        {{ form.brand_name(class="form-control") }}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.brand_description.label(class="form-label fw-semibold") }}
+                        {{ form.brand_description(class="form-control", rows=3) }}
+                        <small class="text-muted">A short description of your brand used in AI prompts.</small>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.brand_voice.label(class="form-label fw-semibold") }}
+                        {{ form.brand_voice(class="form-control") }}
+                    </div>
+                    <div class="mb-4">
+                        {{ form.website_url.label(class="form-label fw-semibold") }}
+                        {{ form.website_url(class="form-control", placeholder="https://yourbrand.com") }}
+                    </div>
+                    <div class="d-flex gap-2">
+                        {{ form.submit(class="btn btn-primary") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

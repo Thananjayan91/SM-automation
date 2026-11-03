@@ -1,0 +1,197 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <!-- Media Header & Actions Bar -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between pb-3 mb-4 border-bottom gap-2">
+        <div class="d-flex align-items-center gap-3">
+            <h5 class="fw-bold mb-0">Media Library</h5>
+            <span class="badge bg-light text-muted border px-2 py-1" style="font-size: 0.8rem;">{{ total }} Media Items</span>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadMediaModal">
+                <i class="bi bi-cloud-arrow-up me-1"></i> Upload Asset
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Main Media Grid -->
+        <div class="col-xl-9 col-lg-8">
+            {% if assets %}
+            <div class="row g-3">
+                {% for asset in assets %}
+                <div class="col-xxl-3 col-xl-4 col-md-4 col-sm-6">
+                    <div class="card border-0 shadow-sm rounded-3 overflow-hidden h-100 media-card position-relative">
+                        <!-- Image Container with aspect ratio -->
+                        <div class="position-relative bg-light overflow-hidden" style="height: 180px;">
+                            <img src="{{ asset.storage_url }}" alt="{{ asset.original_filename }}" class="w-100 h-100 object-fit-cover media-img">
+                            
+                            <!-- Badges overlay -->
+                            <div class="position-absolute bottom-0 start-0 m-2">
+                                <span class="badge bg-dark bg-opacity-75 text-white" style="font-size: 0.65rem;">
+                                    {{ asset.width }}×{{ asset.height }}
+                                </span>
+                                <span class="badge {% if asset.source_type.value == 'ai_generated' %}bg-info{% else %}bg-secondary{% endif %} bg-opacity-75 text-white" style="font-size: 0.65rem;">
+                                    {{ asset.source_type.value }}
+                                </span>
+                            </div>
+
+                            <!-- Actions dropdown on top right -->
+                            <div class="position-absolute top-0 end-0 m-2">
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light bg-white bg-opacity-90 rounded-circle shadow-sm p-1 lh-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="width:28px;height:28px;">
+                                        <i class="bi bi-three-dots-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="font-size:0.85rem;">
+                                        <li>
+                                            <a class="dropdown-item" href="{{ asset.storage_url }}" target="_blank">
+                                                <i class="bi bi-eye me-2"></i> View Full Image
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <button class="dropdown-item" onclick="copyAssetUrl('{{ asset.storage_url }}')">
+                                                <i class="bi bi-link-45deg me-2"></i> Copy Image URL
+                                            </button>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" action="{{ url_for('web.delete_media', asset_id=asset.id) }}" onsubmit="return confirm('Delete this media asset?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="dropdown-item text-danger">
+                                                    <i class="bi bi-trash me-2"></i> Delete Asset
+                                                </button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Footer Info -->
+                        <div class="card-body p-2 d-flex flex-column justify-content-between">
+                            <div class="fw-semibold text-truncate text-dark small" title="{{ asset.original_filename }}">{{ asset.original_filename }}</div>
+                            <div class="d-flex align-items-center justify-content-between mt-1 text-muted" style="font-size: 0.72rem;">
+                                <span>{{ (asset.size_bytes / 1024)|round(1) }} KB</span>
+                                <span>{{ asset.created_at.strftime('%b %d, %Y') }}</span>
+                            </div>
+                            {% if asset.labels_json %}
+                            <div class="d-flex gap-1 flex-wrap mt-1">
+                                {% for lbl in asset.labels_json %}
+                                <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">#{{ lbl }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card border-0 shadow-sm py-5 text-center">
+                <div class="card-body">
+                    <i class="bi bi-images text-muted" style="font-size:3.5rem;"></i>
+                    <h5 class="fw-bold mt-3">No Media Assets Found</h5>
+                    <p class="text-muted small mb-4">Upload photography, graphics, or AI-generated visual content for your posts.</p>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadMediaModal">
+                        <i class="bi bi-cloud-arrow-up me-1"></i> Upload First Image
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Filter Sidebar (matches reference media screenshot) -->
+        <div class="col-xl-3 col-lg-4">
+            <div class="card border-0 shadow-sm sticky-top" style="top: 76px;">
+                <div class="card-header bg-transparent border-0 pt-3 pb-2">
+                    <h6 class="fw-bold mb-0"><i class="bi bi-sliders me-1"></i> Filter Media Items</h6>
+                </div>
+                <div class="card-body">
+                    <!-- Search input -->
+                    <form method="GET" action="{{ url_for('web.media') }}" class="mb-3">
+                        <label class="form-label small fw-semibold">Media Search</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="search" class="form-control" placeholder="Search filenames or notes..." value="{{ current_search or '' }}">
+                            <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+                        </div>
+                    </form>
+
+                    <!-- Time Uploaded Filter -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Time Uploaded</label>
+                        <select class="form-select form-select-sm">
+                            <option selected>All Time</option>
+                            <option>Last 7 Days</option>
+                            <option>Last 30 Days</option>
+                        </select>
+                    </div>
+
+                    <!-- Labels list -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-semibold mb-0">My Labels</label>
+                            {% if current_label %}
+                            <a href="{{ url_for('web.media') }}" class="small text-danger text-decoration-none">Clear filter</a>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            {% for lbl in all_labels %}
+                            <a href="{{ url_for('web.media', label=lbl) }}" class="badge {% if current_label == lbl %}bg-primary text-white{% else %}bg-light text-dark border{% endif %} text-decoration-none px-2 py-1.5" style="font-size:0.75rem;">
+                                {{ lbl }}
+                            </a>
+                            {% else %}
+                            <span class="text-muted small">No labels assigned yet.</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Media Modal -->
+<div class="modal fade" id="uploadMediaModal" tabindex="-1" aria-labelledby="uploadMediaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form method="POST" enctype="multipart/form-data" action="{{ url_for('web.media') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header border-bottom">
+                    <h5 class="modal-title fw-bold" id="uploadMediaModalLabel">Upload Media Asset</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Choose Image</label>
+                        <input type="file" name="file" class="form-control" accept="image/jpeg,image/png,image/webp,image/gif" required>
+                        <div class="form-text small text-muted">Supports JPG, PNG, WEBP, GIF up to 20MB.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Labels / Tags (comma-separated)</label>
+                        <input type="text" name="labels" class="form-control form-control-sm" placeholder="e.g. Products, Barcelona, Summer2026">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Media Notes</label>
+                        <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Usage rights, photo credit, or context notes..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top bg-light">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary px-4">Upload Asset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyAssetUrl(url) {
+    const full = window.location.origin + url;
+    navigator.clipboard.writeText(full).then(() => {
+        alert("Image URL copied to clipboard!");
+    });
+}
+</script>
+{% endblock %}

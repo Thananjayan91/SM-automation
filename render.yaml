@@ -1,0 +1,70 @@
+services:
+  # ── 1. Web Service (Flask + Gunicorn) ──────────────────────────────────────────
+  - type: web
+    name: ai-social-publisher-web
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt && python init_db.py
+    startCommand: gunicorn wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /auth/login
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-social-publisher-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ai-social-publisher-redis
+          property: connectionString
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.10.4
+
+  # ── 2. Background Worker (Celery Queue + Scheduled Beat) ──────────────────────
+  - type: worker
+    name: ai-social-publisher-worker
+    runtime: python
+    rootDir: backend
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A worker.celery worker --beat --loglevel=info
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-social-publisher-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ai-social-publisher-redis
+          property: connectionString
+      - key: CREDENTIAL_ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: ai-social-publisher-web
+          envVarKey: CREDENTIAL_ENCRYPTION_KEY
+      - key: PYTHON_VERSION
+        value: 3.10.4
+
+  # ── 3. Managed Redis Key-Value Store ──────────────────────────────────────────
+  - type: redis
+    name: ai-social-publisher-redis
+    plan: free
+    ipAllowList: []
+
+# ── 4. Managed PostgreSQL Database ────────────────────────────────────────────
+databases:
+  - name: ai-social-publisher-db
+    databaseName: ai_social_publisher
+    user: publisher
+    plan: free
+

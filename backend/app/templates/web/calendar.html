@@ -1,0 +1,190 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <!-- Calendar Top Bar (Matches Contiyo reference) -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <h4 class="fw-bold mb-0">Content Calendar</h4>
+            <div class="btn-group shadow-sm">
+                <a href="{{ url_for('web.calendar', year=prev_year, month=prev_month, channel=current_channel) }}" class="btn btn-outline-secondary btn-sm px-2">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+                <a href="{{ url_for('web.calendar', year=now.year, month=now.month, channel=current_channel) }}" class="btn btn-outline-secondary btn-sm px-3 fw-semibold">
+                    Today
+                </a>
+                <a href="{{ url_for('web.calendar', year=next_year, month=next_month, channel=current_channel) }}" class="btn btn-outline-secondary btn-sm px-2">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </div>
+            <h5 class="fw-bold text-primary mb-0 ms-2">{{ month_name }} {{ year }}</h5>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <!-- Channel Filter Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle rounded-pill px-3" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-funnel me-1"></i>
+                    {% if current_channel == 'all' %}All Channels{% else %}{{ current_channel|capitalize }}{% endif %}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                    <li><a class="dropdown-item {% if current_channel == 'all' %}active{% endif %}" href="{{ url_for('web.calendar', year=year, month=month, channel='all') }}">All Channels</a></li>
+                    <li><a class="dropdown-item {% if current_channel == 'facebook' %}active{% endif %}" href="{{ url_for('web.calendar', year=year, month=month, channel='facebook') }}"><i class="bi bi-facebook text-primary me-2"></i>Facebook Pages</a></li>
+                    <li><a class="dropdown-item {% if current_channel == 'instagram' %}active{% endif %}" href="{{ url_for('web.calendar', year=year, month=month, channel='instagram') }}"><i class="bi bi-instagram text-danger me-2"></i>Instagram</a></li>
+                    <li><a class="dropdown-item {% if current_channel == 'threads' %}active{% endif %}" href="{{ url_for('web.calendar', year=year, month=month, channel='threads') }}"><i class="bi bi-threads text-dark me-2"></i>Threads</a></li>
+                    <li><a class="dropdown-item {% if current_channel == 'tiktok' %}active{% endif %}" href="{{ url_for('web.calendar', year=year, month=month, channel='tiktok') }}"><i class="bi bi-tiktok text-info me-2"></i>TikTok</a></li>
+                </ul>
+            </div>
+
+            <a href="{{ url_for('web.new_post') }}" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm">
+                <i class="bi bi-plus-lg me-1"></i> Create Post
+            </a>
+        </div>
+    </div>
+
+    <!-- Monthly Calendar Grid (Contiyo Style) -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <!-- Weekday Headers -->
+        <div class="row g-0 text-center fw-semibold text-uppercase text-muted border-bottom py-2 bg-light" style="font-size: 0.78rem; letter-spacing: 0.05em;">
+            <div class="col">Mon</div>
+            <div class="col">Tue</div>
+            <div class="col">Wed</div>
+            <div class="col">Thu</div>
+            <div class="col">Fri</div>
+            <div class="col">Sat</div>
+            <div class="col">Sun</div>
+        </div>
+
+        <!-- Weeks Rows -->
+        {% for week in calendar_weeks %}
+        <div class="row g-0 border-bottom" style="min-height: 130px;">
+            {% for day in week %}
+            {% set is_current_month = (day.month == month) %}
+            {% set is_today = (day == now.date()) %}
+            {% set date_str = day.strftime('%Y-%m-%d') %}
+            {% set day_posts = posts_by_date.get(date_str, []) %}
+
+            <div class="col border-end p-2 position-relative {% if not is_current_month %}bg-light bg-opacity-50 text-muted{% else %}bg-white{% endif %}">
+                <!-- Day Number Header -->
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-bold {% if is_today %}badge bg-primary rounded-circle p-1 d-inline-flex align-items-center justify-content-center{% else %}small text-secondary{% endif %}"
+                          style="{% if is_today %}width:24px;height:24px;font-size:0.75rem;{% else %}font-size:0.8rem;{% endif %}">
+                        {{ day.day }}
+                    </span>
+                    {% if day_posts %}
+                    <span class="badge bg-light text-muted border" style="font-size: 0.65rem;">{{ day_posts|length }}</span>
+                    {% endif %}
+                </div>
+
+                <!-- Post Cards Container inside Day Cell -->
+                <div class="d-flex flex-column gap-1 overflow-y-auto" style="max-height: 100px;">
+                    {% for p in day_posts %}
+                    <div class="calendar-post-pill p-1 px-2 rounded-2 cursor-pointer border shadow-xs d-flex align-items-center gap-1
+                        {% if p.status.value == 'published' %}bg-success-subtle border-success-subtle text-success-emphasis
+                        {% elif p.status.value == 'approved' %}bg-primary-subtle border-primary-subtle text-primary-emphasis
+                        {% elif p.status.value == 'ready_for_review' %}bg-warning-subtle border-warning-subtle text-warning-emphasis
+                        {% else %}bg-light text-muted{% endif %}"
+                        onclick="openPostModal('{{ p.id }}', '{{ p.caption|replace('\'', '\\\'')|replace('\n', ' ') if p.caption else 'Untitled Post' }}', '{{ p.status.value }}', '{{ p.scheduled_for.strftime('%Y-%m-%dT%H:%M') if p.scheduled_for else '' }}', '{{ p.media_links[0].media_asset.storage_url if p.media_links else '' }}')">
+                        
+                        <!-- Platform Icon -->
+                        {% if p.targets and p.targets[0].social_account %}
+                        <i class="bi bi-{{ p.targets[0].social_account.platform.value }}" style="font-size: 0.75rem;"></i>
+                        {% else %}
+                        <i class="bi bi-facebook" style="font-size: 0.75rem;"></i>
+                        {% endif %}
+
+                        <!-- Snippet text -->
+                        <span class="text-truncate fw-medium" style="font-size: 0.75rem; max-width: 95px;">
+                            {{ p.caption or 'Untitled Post' }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Calendar Legend Bar -->
+    <div class="d-flex flex-wrap gap-4 align-items-center justify-content-center text-muted small py-2">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-success-subtle border border-success-subtle text-success p-1 px-2 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i> Published</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary-subtle border border-primary-subtle text-primary p-1 px-2 rounded-pill"><i class="bi bi-clock-fill me-1"></i> Approved / Scheduled</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-warning-subtle border border-warning-subtle text-warning-emphasis p-1 px-2 rounded-pill"><i class="bi bi-hourglass-split me-1"></i> Ready for Review</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light border text-muted p-1 px-2 rounded-pill"><i class="bi bi-pencil me-1"></i> Draft</span>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Post Quick Preview & Reschedule -->
+<div class="modal fade" id="postQuickModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header border-0 pb-0">
+                <span class="badge bg-secondary text-uppercase" id="modal-status-badge">DRAFT</span>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-3">
+                <div class="text-center mb-3" id="modal-image-box" style="display:none;">
+                    <img id="modal-image" src="" alt="Thumbnail" class="img-fluid rounded-3 border" style="max-height: 180px; object-fit: cover;">
+                </div>
+                <h6 class="fw-bold mb-2">Post Content</h6>
+                <p class="text-dark small border rounded-3 p-3 bg-light mb-3" id="modal-caption-text" style="white-space: pre-wrap;"></p>
+
+                <!-- Reschedule Form -->
+                <form method="POST" id="reschedule-form" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <label class="form-label fw-semibold small mb-1"><i class="bi bi-calendar-event me-1"></i> Reschedule Post Date & Time</label>
+                    <div class="input-group mb-2">
+                        <input type="datetime-local" name="scheduled_for" id="modal-scheduled-input" class="form-control form-control-sm">
+                        <button type="submit" class="btn btn-outline-primary btn-sm">Save Date</button>
+                    </div>
+                    <div class="form-text small text-muted">Leave blank and click save to clear schedule.</div>
+                </form>
+            </div>
+            <div class="modal-footer border-0 pt-0 d-flex justify-content-between">
+                <button type="button" class="btn btn-light btn-sm rounded-pill px-3" data-bs-dismiss="modal">Close</button>
+                <a id="modal-editor-link" href="#" class="btn btn-primary btn-sm rounded-pill px-4">
+                    <i class="bi bi-pencil-square me-1"></i> Open Studio Editor
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.cursor-pointer { cursor: pointer; }
+.calendar-post-pill { transition: transform 0.1s ease, box-shadow 0.1s ease; }
+.calendar-post-pill:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
+</style>
+
+<script>
+function openPostModal(postId, caption, status, scheduledFor, imgUrl) {
+    document.getElementById('modal-status-badge').textContent = status.toUpperCase();
+    document.getElementById('modal-caption-text').textContent = caption || 'No caption text provided.';
+    document.getElementById('modal-editor-link').href = '/app/posts/' + postId + '/edit';
+    document.getElementById('reschedule-form').action = '/app/posts/' + postId + '/reschedule';
+    document.getElementById('modal-scheduled-input').value = scheduledFor || '';
+
+    const imgBox = document.getElementById('modal-image-box');
+    const imgEl = document.getElementById('modal-image');
+    if (imgUrl) {
+        imgEl.src = imgUrl;
+        imgBox.style.display = 'block';
+    } else {
+        imgBox.style.display = 'none';
+        imgEl.src = '';
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('postQuickModal'));
+    modal.show();
+}
+</script>
+{% endblock %}

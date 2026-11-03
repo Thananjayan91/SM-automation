@@ -1,0 +1,29 @@
+[Unit]
+Description=AI Social Publisher — Flask/Gunicorn
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/ai-social-publisher/backend
+Environment="PATH=/opt/ai-social-publisher/.venv/bin"
+EnvironmentFile=/opt/ai-social-publisher/.env
+ExecStart=/opt/ai-social-publisher/.venv/bin/gunicorn \
+    --workers 2 \
+    --worker-class sync \
+    --bind 127.0.0.1:8000 \
+    --timeout 60 \
+    --access-logfile /var/log/ai-social-publisher/access.log \
+    --error-logfile /var/log/ai-social-publisher/error.log \
+    wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

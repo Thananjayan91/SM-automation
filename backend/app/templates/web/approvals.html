@@ -1,0 +1,87 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+        <div>
+            <h4 class="fw-bold mb-1">Version Approvals & Sign-Off</h4>
+            <p class="text-muted small mb-0">Review pending post versions, inspect edits, and approve content for social delivery.</p>
+        </div>
+        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">{{ posts|length }} posts in review queue</span>
+    </div>
+
+    <!-- Approvals List -->
+    {% if posts %}
+    <div class="row g-4">
+        {% for post in posts %}
+        <div class="col-md-6 col-xl-4">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 d-flex flex-column justify-content-between bg-white">
+                <div>
+                    <!-- Post Header with Version and Author -->
+                    <div class="p-3 border-bottom d-flex justify-content-between align-items-center bg-light bg-opacity-50">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-dark rounded-pill px-2">v{{ post.content_version }}</span>
+                            <span class="badge {% if post.status.value == 'approved' %}bg-success{% else %}bg-warning-subtle text-warning-emphasis{% endif %} rounded-pill px-2 text-uppercase" style="font-size:0.7rem;">
+                                {{ post.status.value.replace('_', ' ') }}
+                            </span>
+                        </div>
+                        <span class="text-muted small" style="font-size:0.75rem;">{{ post.updated_at.strftime('%b %d, %I:%M %p') }}</span>
+                    </div>
+
+                    <!-- Post Thumbnail if media attached -->
+                    {% if post.media_links %}
+                    <div class="bg-light text-center border-bottom overflow-hidden" style="max-height: 180px;">
+                        <img src="{{ post.media_links[0].media_asset.storage_url }}" alt="media" class="img-fluid w-100 object-fit-cover" style="max-height: 180px;">
+                    </div>
+                    {% endif %}
+
+                    <!-- Post Caption -->
+                    <div class="p-3">
+                        <p class="text-dark small mb-3" style="white-space: pre-wrap; max-height: 120px; overflow-y: auto;">{{ post.caption or 'Untitled post draft.' }}</p>
+
+                        <!-- Targeted Platforms -->
+                        <div class="d-flex align-items-center gap-1 mb-2">
+                            <span class="text-muted small me-1">Targets:</span>
+                            {% for t in post.targets %}
+                            <span class="badge bg-light text-dark border rounded-pill small" title="{{ t.platform.value|capitalize }}">
+                                <i class="bi bi-{{ t.platform.value }} me-1"></i> {{ t.social_account.display_name if t.social_account else t.platform.value|capitalize }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted small fst-italic">No accounts selected</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer with Action Buttons -->
+                <div class="p-3 border-top bg-light bg-opacity-25 d-flex gap-2">
+                    <a href="{{ url_for('web.edit_post', post_id=post.id) }}" class="btn btn-outline-secondary btn-sm rounded-pill flex-grow-1">
+                        <i class="bi bi-pencil me-1"></i> Review & Edit
+                    </a>
+                    {% if post.status.value != 'approved' and membership.role.value in ['owner', 'admin', 'publisher'] %}
+                    <form method="POST" action="{{ url_for('web.approve_post', post_id=post.id) }}" style="display:inline;" class="flex-grow-1">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-success btn-sm rounded-pill w-100">
+                            <i class="bi bi-check2-circle me-1"></i> Approve
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm rounded-4 text-center py-5 bg-white">
+        <div class="avatar bg-success-subtle text-success rounded-circle mx-auto d-flex align-items-center justify-content-center mb-3" style="width:64px;height:64px;">
+            <i class="bi bi-check2-all fs-2"></i>
+        </div>
+        <h6 class="fw-bold mb-1">Queue is Clear!</h6>
+        <p class="text-muted small mb-3">There are no posts currently waiting for approval.</p>
+        <a href="{{ url_for('web.posts') }}" class="btn btn-outline-primary btn-sm rounded-pill px-4">
+            View All Posts
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
