@@ -17,13 +17,21 @@ export async function apiSubmitSource(payload: SubmitSourcePayload) {
   });
 }
 
-export async function apiTriggerGenerate(topic?: string, sourceId?: string, postId?: string) {
+export async function apiTriggerGenerate(
+  topic?: string,
+  sourceId?: string,
+  postId?: string,
+  language: 'english' | 'tamil' | 'sinhala' = 'english',
+  tone?: string
+) {
   return apiClient.request<GenerationJob>('/api/v1/posts/generate', {
     method: 'POST',
     body: JSON.stringify({
       topic,
       source_id: sourceId,
       post_id: postId,
+      language,
+      tone,
     }),
   });
 }

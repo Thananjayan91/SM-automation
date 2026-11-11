@@ -40,6 +40,11 @@ def api_generate_post():
     source_url = data.get("source_url")
     post_id = data.get("post_id")
     media_asset_id = data.get("media_asset_id")
+    language = (data.get("language") or "english").strip().lower()
+    if language not in {"english", "tamil", "sinhala"}:
+        language = "english"
+    tone = (data.get("tone") or "professional").strip().lower()
+    instruction_str = f"tone={tone};language={language}"
 
     # If topic or URL is passed directly without an existing source, create a source record
     if (topic or source_url) and not source_id:
@@ -50,10 +55,15 @@ def api_generate_post():
             source_url=source_url,
             headline=(topic or source_url)[:250],
             raw_text=topic or source_url,
+            tone_instruction=instruction_str,
         )
         db.session.add(source)
         db.session.flush()
         source_id = source.id
+    elif source_id:
+        existing_src = db.session.get(Source, source_id)
+        if existing_src and existing_src.tenant_id == tenant_id:
+            existing_src.tone_instruction = instruction_str
 
     # If user pre-selected a manual photo before clicking Generate with AI, preserve it on the draft
     if media_asset_id and not post_id:

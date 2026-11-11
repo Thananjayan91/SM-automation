@@ -78,16 +78,29 @@
                             </div>
                         </div>
 
-                        <!-- AI Writing Instructions / Tone -->
-                        <div class="row g-2 align-items-center">
+                        <!-- AI Writing Instructions / Tone & Language -->
+                        <div class="row g-3 align-items-end">
                             <div class="col-sm-6">
                                 <label class="form-label fw-semibold small mb-1">Tone & Voice</label>
-                                <select name="tone_instruction" class="form-select form-select-sm">
+                                <select name="tone_instruction" id="tone-select" class="form-select form-select-sm">
                                     <option value="professional">Professional & Authoritative</option>
                                     <option value="engaging" selected>Engaging & Conversational</option>
                                     <option value="playful">Playful & Enthusiastic</option>
                                     <option value="informative">Educational & Informative</option>
                                 </select>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label fw-semibold small mb-1">Output Language</label>
+                                <div class="btn-group btn-group-sm w-100" role="group" aria-label="Content Language">
+                                    <input type="radio" class="btn-check" name="ai_language" id="lang-en" value="english" checked autocomplete="off">
+                                    <label class="btn btn-outline-primary" for="lang-en">English</label>
+
+                                    <input type="radio" class="btn-check" name="ai_language" id="lang-ta" value="tamil" autocomplete="off">
+                                    <label class="btn btn-outline-primary" for="lang-ta">தமிழ்</label>
+
+                                    <input type="radio" class="btn-check" name="ai_language" id="lang-si" value="sinhala" autocomplete="off">
+                                    <label class="btn btn-outline-primary" for="lang-si">සිංහල</label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -364,7 +377,9 @@ function triggerAIGeneration() {
         body: JSON.stringify({
             topic: topic,
             source_url: sourceUrl || null,
-            media_asset_id: document.getElementById('selected-media-id').value || null
+            media_asset_id: document.getElementById('selected-media-id').value || null,
+            language: document.querySelector('input[name="ai_language"]:checked')?.value || 'english',
+            tone: document.getElementById('tone-select')?.value || 'engaging'
         })
     })
     .then(r => {

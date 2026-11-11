@@ -25,6 +25,12 @@ const TONE_PRESETS = [
   'Inspirational',
 ];
 
+const LANGUAGE_OPTIONS: { key: 'english' | 'tamil' | 'sinhala'; label: string }[] = [
+  { key: 'english', label: 'English' },
+  { key: 'tamil', label: 'தமிழ் (Tamil)' },
+  { key: 'sinhala', label: 'සිංහල (Sinhala)' },
+];
+
 export const QuickCaptureScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const [mode, setMode] = useState<'topic' | 'url'>('topic');
@@ -32,6 +38,7 @@ export const QuickCaptureScreen = () => {
   const [sourceUrl, setSourceUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedTone, setSelectedTone] = useState(TONE_PRESETS[0]);
+  const [selectedLanguage, setSelectedLanguage] = useState<'english' | 'tamil' | 'sinhala'>('english');
   const [generating, setGenerating] = useState(false);
 
   const handleStartGeneration = async () => {
@@ -68,7 +75,10 @@ export const QuickCaptureScreen = () => {
       // Trigger asynchronous generation job
       const genRes = await apiTriggerGenerate(
         mode === 'topic' ? topic.trim() : undefined,
-        sourceId
+        sourceId,
+        undefined,
+        selectedLanguage,
+        selectedTone
       );
 
       if (genRes.data) {
@@ -162,6 +172,25 @@ export const QuickCaptureScreen = () => {
             />
           </View>
         )}
+
+        {/* Language Toggle Selector */}
+        <Text style={[styles.label, { marginTop: Spacing.md }]}>Output Language</Text>
+        <View style={styles.toneWrap}>
+          {LANGUAGE_OPTIONS.map((lang) => {
+            const isSelected = selectedLanguage === lang.key;
+            return (
+              <TouchableOpacity
+                key={lang.key}
+                style={[styles.tonePill, isSelected && styles.tonePillActive]}
+                onPress={() => setSelectedLanguage(lang.key)}
+              >
+                <Text style={[styles.tonePillText, isSelected && styles.tonePillTextActive]}>
+                  {lang.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         {/* Tone Selector */}
         <Text style={[styles.label, { marginTop: Spacing.md }]}>Tone & Voice</Text>

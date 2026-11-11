@@ -111,11 +111,25 @@ def execute_generation_job(job_id: str) -> GenerationJob:
         job.progress_pct = 70
         db.session.commit()
 
+        tone = "professional"
+        language = "english"
+        if source_obj and source_obj.tone_instruction:
+            raw_inst = source_obj.tone_instruction
+            if "language=" in raw_inst or "tone=" in raw_inst:
+                for part in raw_inst.split(";"):
+                    if part.startswith("language="):
+                        language = part.split("=", 1)[1].strip() or "english"
+                    elif part.startswith("tone="):
+                        tone = part.split("=", 1)[1].strip() or "professional"
+            else:
+                tone = raw_inst
+
         text_provider = get_text_provider()
         caption_result = text_provider.generate_caption(
             topic=topic,
             research_summary=res_result.summary,
-            tone="professional",
+            tone=tone,
+            language=language,
         )
 
         if caption_result.tokens_used:

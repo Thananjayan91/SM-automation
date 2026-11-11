@@ -20,7 +20,18 @@
             </div>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <!-- AI Language Toggle -->
+            <div class="btn-group btn-group-sm" role="group" aria-label="AI Rewrite Language">
+                <input type="radio" class="btn-check" name="edit_ai_language" id="edit-lang-en" value="english" checked autocomplete="off">
+                <label class="btn btn-outline-secondary" for="edit-lang-en">EN</label>
+
+                <input type="radio" class="btn-check" name="edit_ai_language" id="edit-lang-ta" value="tamil" autocomplete="off">
+                <label class="btn btn-outline-secondary" for="edit-lang-ta">தமிழ்</label>
+
+                <input type="radio" class="btn-check" name="edit_ai_language" id="edit-lang-si" value="sinhala" autocomplete="off">
+                <label class="btn btn-outline-secondary" for="edit-lang-si">සිංහල</label>
+            </div>
             <!-- AI Rewrite trigger -->
             <button type="button" class="btn btn-outline-info" onclick="triggerPostRegenerate()">
                 <i class="bi bi-stars me-1"></i> AI Rewrite
@@ -507,7 +518,8 @@ function triggerPostRegenerate() {
         },
         body: JSON.stringify({
             post_id: '{{ post.id }}',
-            topic: caption || 'Social Media Update'
+            topic: caption || 'Social Media Update',
+            language: document.querySelector('input[name="edit_ai_language"]:checked')?.value || 'english'
         })
     })
     .then(r => r.json())

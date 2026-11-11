@@ -132,3 +132,34 @@ def test_tenant_isolation_on_jobs(app, client, tenant_a, user_a, tenant_b):
 
     resp = client.get(f"/api/v1/jobs/{other_job_id}", headers={"X-Tenant-ID": tenant_a.id})
     assert resp.status_code == 404
+
+
+def test_multilingual_caption_generation(app, client, tenant_a, user_a):
+    provider = MockTextProvider()
+    ta = provider.generate_caption("Vivo X200", language="tamil")
+    assert "முக்கிய தகவல்கள்" in ta.caption
+    assert "#தமிழ்" in ta.hashtags
+
+    si = provider.generate_caption("Vivo X200", language="sinhala")
+    assert "නවතම තොරතුරු" in si.caption
+    assert "#සිංහල" in si.hashtags
+
+    with client.session_transaction() as sess:
+        sess["_user_id"] = user_a.id
+        sess["active_tenant_id"] = tenant_a.id
+
+    resp = client.post(
+        "/api/v1/posts/generate",
+        json={"topic": "Jaffna Tech Summit", "language": "tamil", "tone": "engaging"},
+        headers={"X-Tenant-ID": tenant_a.id},
+    )
+    assert resp.status_code == 202
+    data = resp.get_json()
+    assert data["post_id"] is not None
+
+    with app.app_context():
+        from app.models import Post
+        post = db.session.get(Post, data["post_id"])
+        assert "Jaffna Tech Summit" in post.caption
+        assert "பகிருங்கள்" in post.caption
+

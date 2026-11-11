@@ -52,6 +52,7 @@ class BaseTextProvider(ABC):
         research_summary: Optional[str] = None,
         tone: str = "professional",
         target_platforms: Optional[List[str]] = None,
+        language: str = "english",
     ) -> CaptionResult:
         """Generate engaging platform-tailored caption and hashtags."""
         pass
