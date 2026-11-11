@@ -8,6 +8,24 @@ from .base import BaseImageProvider, ImageGenResult
 logger = logging.getLogger(__name__)
 
 
+def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Load a crisp TrueType font across Windows and Linux, falling back cleanly."""
+    candidates = [
+        "arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
 class MockImageProvider(BaseImageProvider):
     """Generates high quality branded social media banner images locally using Pillow."""
 
@@ -53,13 +71,9 @@ class MockImageProvider(BaseImageProvider):
             fill=(255, 255, 255, 40),
         )
 
-        # Draw text using basic font if truetype isn't bundled
-        try:
-            font_title = ImageFont.truetype("arial.ttf", 46)
-            font_meta = ImageFont.truetype("arial.ttf", 26)
-        except IOError:
-            font_title = ImageFont.load_default()
-            font_meta = ImageFont.load_default()
+        # Draw text using system TrueType font or sized Pillow default font
+        font_title = _load_font(46)
+        font_meta = _load_font(26)
 
         draw.text((card_margin + 80, badge_y + 10), "AI SOCIAL STUDIO", fill=(255, 255, 255), font=font_meta)
 

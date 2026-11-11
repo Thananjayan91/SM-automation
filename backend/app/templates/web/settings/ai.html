@@ -2,20 +2,75 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-7">
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-transparent border-0">
-                <h5 class="fw-semibold mb-0">AI settings</h5>
-                <p class="text-muted small mb-0">Configure AI generation preferences and model providers.</p>
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                <h5 class="fw-bold mb-1">AI Provider Settings</h5>
+                <p class="text-muted small mb-0">Live status of your text copywriting and graphic generation engines.</p>
             </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="bi bi-stars me-2"></i>
-                    AI provider and prompt configuration will be available in Milestone 3.
+            <div class="card-body p-4">
+                {% if openai_configured %}
+                <div class="alert alert-success d-flex align-items-center gap-3 rounded-3">
+                    <i class="bi bi-check-circle-fill fs-4"></i>
+                    <div>
+                        <div class="fw-bold">OpenAI API Connected</div>
+                        <div class="small">Text Engine: <code>GPT-4o-mini</code> &nbsp;|&nbsp; Image Engine: <code>DALL-E 3</code></div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning d-flex align-items-center gap-3 rounded-3">
+                    <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+                    <div>
+                        <div class="fw-bold">OpenAI API Key Not Set (Using Built-In Fallback Mode)</div>
+                        <div class="small">
+                            Currently using deterministic text templates and Pillow banners. Add <code>OPENAI_API_KEY</code> to your Vercel Environment Variables (or local <code>backend/.env</code>) and redeploy to activate GPT-4o-mini &amp; DALL-E 3.
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="table-responsive mt-3">
+                    <table class="table table-bordered align-middle mb-0 small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Pipeline Stage</th>
+                                <th>Active Provider</th>
+                                <th>Mode</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="fw-semibold">Research &amp; Fact-Checking</td>
+                                <td><code>WebResearchProvider</code></td>
+                                <td><span class="badge bg-info-subtle text-info-emphasis">Live Web / Citations</span></td>
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold">Caption &amp; Hashtags</td>
+                                <td><code>{{ 'OpenAITextProvider (gpt-4o-mini)' if openai_configured else 'MockTextProvider' }}</code></td>
+                                <td>
+                                    {% if openai_configured %}
+                                    <span class="badge bg-success-subtle text-success">Live AI</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary">Fallback</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="fw-semibold">Social Graphic Banner</td>
+                                <td><code>{{ 'DallEImageProvider (dall-e-3)' if openai_configured else 'MockImageProvider (Pillow)' }}</code></td>
+                                <td>
+                                    {% if openai_configured %}
+                                    <span class="badge bg-success-subtle text-success">Live AI</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary">Fallback</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-

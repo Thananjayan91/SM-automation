@@ -214,19 +214,21 @@ def edit_post(post_id: str):
 
             from ..services import meta_service
             now = datetime.datetime.now(timezone.utc)
+            post = updated_post or post
 
-            # Prepare full message and media
+            # Prepare full message and all attached media assets in order
             full_message = post.caption or ""
             if post.hashtags_json:
                 full_message += "\n\n" + " ".join(post.hashtags_json)
 
-            image_bytes = None
-            image_filename = "post.png"
-            if post.media_links:
-                primary_media = post.media_links[0].media_asset
-                image_bytes = media_service.read_media_bytes(primary_media)
-                if primary_media.original_filename:
-                    image_filename = primary_media.original_filename
+            media_items = []
+            for ml in sorted(post.media_links, key=lambda x: x.position):
+                if ml.media_asset:
+                    raw = media_service.read_media_bytes(ml.media_asset)
+                    if raw:
+                        fname = ml.media_asset.original_filename or "post.png"
+                        mime = ml.media_asset.mime_type or "image/png"
+                        media_items.append((fname, raw, mime))
 
             success_count = 0
             fail_count = 0
@@ -246,9 +248,8 @@ def edit_post(post_id: str):
                         page_id=page_id,
                         access_token=token,
                         message=full_message,
-                        image_bytes=image_bytes,
-                        image_filename=image_filename,
                         first_comment=first_comment_text,
+                        media_items=media_items,
                     )
                     if ok:
                         target.status = PostTargetStatus.SUCCESS
@@ -1085,7 +1086,18 @@ def delete_social_account(account_id: str):
 @tenant_required
 @require_perm("ai_settings.view")
 def settings_ai():
-    return render_template("web/settings/ai.html", title="AI Settings", tenant=g.tenant, membership=g.membership)
+    openai_configured = bool(os.environ.get("OPENAI_API_KEY"))
+    text_model = os.environ.get("AI_TEXT_PROVIDER", "openai" if openai_configured else "mock")
+    image_model = os.environ.get("AI_IMAGE_PROVIDER", "dalle" if openai_configured else "mock")
+    return render_template(
+        "web/settings/ai.html",
+        title="AI Settings",
+        tenant=g.tenant,
+        membership=g.membership,
+        openai_configured=openai_configured,
+        text_model=text_model,
+        image_model=image_model,
+    )
 
 
 @web_bp.route("/settings/billing")

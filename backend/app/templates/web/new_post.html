@@ -363,7 +363,8 @@ function triggerAIGeneration() {
         },
         body: JSON.stringify({
             topic: topic,
-            source_url: sourceUrl || null
+            source_url: sourceUrl || null,
+            media_asset_id: document.getElementById('selected-media-id').value || null
         })
     })
     .then(r => {

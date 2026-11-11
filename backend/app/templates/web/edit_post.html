@@ -256,12 +256,36 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content border-0 shadow">
             <div class="modal-header">
-                <h5 class="modal-title" id="attachMediaModalLabel">Select Media from Library</h5>
+                <h5 class="modal-title" id="attachMediaModalLabel">Attach or Upload Photo</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <!-- Direct File Upload Box -->
+                <div class="border rounded-3 p-3 bg-light mb-3">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div>
+                            <div class="fw-semibold small"><i class="bi bi-cloud-arrow-up text-primary me-1"></i> Upload Photo Directly</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">PNG, JPG, WEBP up to 4.5 MB</div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <input type="file" id="direct-photo-input" accept="image/*" class="form-control form-control-sm" style="max-width: 240px;">
+                            <button type="button" class="btn btn-sm btn-primary" id="direct-upload-btn" onclick="uploadAndAttachPhoto()">
+                                <i class="bi bi-upload me-1"></i> Upload &amp; Attach
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-check mt-2 mb-0">
+                        <input class="form-check-input" type="checkbox" id="replace-existing-media" checked>
+                        <label class="form-check-label small text-muted" for="replace-existing-media">
+                            Replace current attached photo(s) (uncheck to add multiple photos)
+                        </label>
+                    </div>
+                    <div id="direct-upload-error" class="text-danger small mt-2" style="display:none;"></div>
+                </div>
+
                 {% if media_assets %}
-                <div class="row g-2">
+                <div class="small fw-semibold text-muted text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: .04em;">Or Pick from Media Library</div>
+                <div class="row g-2" id="library-media-grid">
                     {% for asset in media_assets %}
                     <div class="col-md-3 col-sm-4 col-6">
                         <div class="border rounded-2 p-1 position-relative cursor-pointer hover-shadow" onclick="addMediaAsset('{{ asset.id }}', '{{ asset.storage_url }}')">
@@ -273,8 +297,7 @@
                 </div>
                 {% else %}
                 <div class="text-center py-4 text-muted">
-                    <p class="mb-2">No assets uploaded in this workspace yet.</p>
-                    <a href="{{ url_for('web.media') }}" target="_blank" class="btn btn-sm btn-primary">Go to Media Library</a>
+                    <p class="mb-2">No assets uploaded in this workspace yet. Use the upload box above to attach a photo!</p>
                 </div>
                 {% endif %}
             </div>
@@ -352,13 +375,65 @@ function filterProfiles() {
     });
 }
 
+function uploadAndAttachPhoto() {
+    const input = document.getElementById('direct-photo-input');
+    const errEl = document.getElementById('direct-upload-error');
+    const btn = document.getElementById('direct-upload-btn');
+    errEl.style.display = 'none';
+
+    if (!input.files || !input.files[0]) {
+        errEl.textContent = 'Please select an image file first.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading...';
+
+    fetch('/api/v1/media/uploads', {
+        method: 'POST',
+        body: formData
+    })
+    .then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.message || 'Upload failed');
+        return data;
+    })
+    .then(asset => {
+        input.value = '';
+        addMediaAsset(asset.id, asset.storage_url);
+    })
+    .catch(err => {
+        errEl.textContent = err.message || 'Failed to upload image.';
+        errEl.style.display = 'block';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload me-1"></i> Upload & Attach';
+    });
+}
+
 function addMediaAsset(assetId, assetUrl) {
     const area = document.getElementById('attached-media-preview-area');
+    const replaceChecked = document.getElementById('replace-existing-media')?.checked;
+
+    if (replaceChecked) {
+        area.querySelectorAll('[id^="attached-box-"]').forEach(el => el.remove());
+    }
+
     const noMsg = document.getElementById('no-media-attached-msg');
     if (noMsg) noMsg.style.display = 'none';
 
-    // Remove existing if already present
-    if (document.getElementById('attached-box-' + assetId)) return;
+    // Avoid duplicates
+    if (document.getElementById('attached-box-' + assetId)) {
+        const modalEl = document.getElementById('attachMediaModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+        return;
+    }
 
     const div = document.createElement('div');
     div.className = 'position-relative border rounded-2 overflow-hidden bg-white';
@@ -377,7 +452,6 @@ function addMediaAsset(assetId, assetUrl) {
     // Update live previews
     const fbBox = document.getElementById('live-media-box');
     const fbImg = document.getElementById('live-media-img');
-    const igBox = document.getElementById('live-ig-media-box');
     const igImg = document.getElementById('live-ig-img');
     const igPlaceholder = document.getElementById('live-ig-placeholder');
 
@@ -397,8 +471,8 @@ function removeAttachedMedia(assetId) {
     const box = document.getElementById('attached-box-' + assetId);
     if (box) box.remove();
 
-    const remaining = document.querySelectorAll('#attached-media-preview-area input[name="media_ids"]');
-    if (remaining.length === 0) {
+    const remainingBoxes = document.querySelectorAll('#attached-media-preview-area [id^="attached-box-"]');
+    if (remainingBoxes.length === 0) {
         const noMsg = document.getElementById('no-media-attached-msg');
         if (noMsg) noMsg.style.display = 'block';
         document.getElementById('live-media-box').style.display = 'none';
@@ -407,6 +481,10 @@ function removeAttachedMedia(assetId) {
         document.getElementById('live-ig-img').src = '';
         const igPlaceholder = document.getElementById('live-ig-placeholder');
         if (igPlaceholder) igPlaceholder.style.display = 'block';
+    } else {
+        const firstRemainingImg = remainingBoxes[0].querySelector('img')?.src || '';
+        document.getElementById('live-media-img').src = firstRemainingImg;
+        document.getElementById('live-ig-img').src = firstRemainingImg;
     }
 }
 

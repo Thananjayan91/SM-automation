@@ -144,11 +144,13 @@ def update_post_content(
     # Update media attachments
     if media_asset_ids is not None:
         PostMedia.query.filter_by(post_id=post.id).delete()
+        db.session.flush()
         _attach_media_to_post(post, media_asset_ids, tenant_id)
 
     # Update targets
     if social_account_ids is not None:
         PostTarget.query.filter_by(post_id=post.id).delete()
+        db.session.flush()
         _set_post_targets(post, social_account_ids, tenant_id)
 
     # Snapshot new immutable PostVersion
@@ -164,6 +166,7 @@ def update_post_content(
     )
     db.session.add(new_version)
     db.session.commit()
+    db.session.refresh(post)
 
     return post, None
 

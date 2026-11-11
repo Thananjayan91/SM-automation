@@ -155,3 +155,77 @@ def test_test_connection_endpoint(app, client, tenant_a, user_a):
         reloaded = db.session.get(SocialAccount, acc_id)
         assert reloaded.status == SocialAccountStatus.CONNECTED
 
+
+@patch("requests.post")
+def test_publish_multi_photo_to_facebook_page(mock_post):
+    up1 = MagicMock()
+    up1.status_code = 200
+    up1.json.return_value = {"id": "fb_photo_1"}
+
+    up2 = MagicMock()
+    up2.status_code = 200
+    up2.json.return_value = {"id": "fb_photo_2"}
+
+    feed = MagicMock()
+    feed.status_code = 200
+    feed.json.return_value = {"id": "104829_999888"}
+
+    mock_post.side_effect = [up1, up2, feed]
+
+    ok, post_id, err = meta_service.publish_to_facebook_page(
+        page_id="104829",
+        access_token="EAA_valid_token",
+        message="Multi-photo gallery",
+        media_items=[
+            ("photo1.jpg", b"bytes1", "image/jpeg"),
+            ("photo2.png", b"bytes2", "image/png"),
+        ],
+    )
+    assert ok is True
+    assert post_id == "104829_999888"
+    assert err is None
+    assert mock_post.call_count == 3
+    assert mock_post.call_args_list[0].kwargs["data"]["published"] == "false"
+    assert mock_post.call_args_list[2].args[0].endswith("/104829/feed")
+
+
+def test_ai_generation_preserves_manual_media(app, db, tenant_a, user_a, client):
+    import io
+    from PIL import Image
+    from werkzeug.datastructures import FileStorage
+    from app.models.media_asset import MediaSourceType
+    from app.models.post import Post
+    from app.services import media_service
+
+    with app.app_context():
+        stream = io.BytesIO()
+        Image.new("RGB", (120, 120), color="red").save(stream, format="PNG")
+        stream.seek(0)
+        asset, err = media_service.save_media_file(
+            FileStorage(stream=stream, filename="manual.png", content_type="image/png"),
+            tenant_id=tenant_a.id,
+            user_id=user_a.id,
+            source_type=MediaSourceType.UPLOADED,
+        )
+        assert err is None
+        asset_id = asset.id
+
+    with client.session_transaction() as sess:
+        sess["_user_id"] = user_a.id
+        sess["active_tenant_id"] = tenant_a.id
+
+    resp = client.post(
+        "/api/v1/posts/generate",
+        json={"topic": "Product launch", "media_asset_id": asset_id},
+    )
+    assert resp.status_code == 202
+    data = resp.get_json()
+    post_id = data["post_id"]
+    assert post_id is not None
+
+    with app.app_context():
+        post = content_service.get_tenant_post(post_id, tenant_a.id)
+        assert len(post.media_links) == 1
+        assert post.media_links[0].media_asset_id == asset_id
+
+

@@ -37,19 +37,36 @@ def api_generate_post():
     data = request.get_json(silent=True) or {}
     source_id = data.get("source_id")
     topic = data.get("topic")
+    source_url = data.get("source_url")
     post_id = data.get("post_id")
+    media_asset_id = data.get("media_asset_id")
 
-    # If topic is passed directly without an existing source, create a source record
-    if topic and not source_id:
+    # If topic or URL is passed directly without an existing source, create a source record
+    if (topic or source_url) and not source_id:
         source = Source(
             tenant_id=tenant_id,
-            source_type=SourceType.MANUAL,
-            headline=topic[:250],
-            raw_text=topic,
+            created_by=current_user.id,
+            source_type=SourceType.URL if source_url else SourceType.MANUAL,
+            source_url=source_url,
+            headline=(topic or source_url)[:250],
+            raw_text=topic or source_url,
         )
         db.session.add(source)
         db.session.flush()
         source_id = source.id
+
+    # If user pre-selected a manual photo before clicking Generate with AI, preserve it on the draft
+    if media_asset_id and not post_id:
+        from ...services.content_service import create_draft_post
+        draft, _ = create_draft_post(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            caption="",
+            media_asset_ids=[media_asset_id],
+            source_id=source_id,
+        )
+        if draft:
+            post_id = draft.id
 
     job = GenerationJob(
         tenant_id=tenant_id,
@@ -64,7 +81,11 @@ def api_generate_post():
     db.session.commit()
 
     # Trigger async dispatch or inline execution
-    dispatch_generation_job(job.id, async_mode=True)
+    try:
+        dispatch_generation_job(job.id, async_mode=True)
+    except Exception:
+        # Inline execution failure is already recorded on the job row
+        db.session.refresh(job)
 
     return jsonify(job.to_dict()), 202
 

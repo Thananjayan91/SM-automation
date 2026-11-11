@@ -131,44 +131,60 @@ def execute_generation_job(job_id: str) -> GenerationJob:
             )
         db.session.commit()
 
-        # 4. Branded image generation
+        # 4. Branded image generation (preserve existing uploaded media if already attached)
         job.current_step = JobStep.IMAGE_GENERATION
         job.progress_pct = 90
         db.session.commit()
 
-        image_provider = get_image_provider()
-        img_result = image_provider.generate_image(prompt=topic, style="modern")
+        preserved_media_ids = None
+        if job.post_id:
+            existing_post = db.session.get(Post, job.post_id)
+            if existing_post and existing_post.media_links:
+                uploaded_links = [
+                    ml.media_asset_id
+                    for ml in sorted(existing_post.media_links, key=lambda x: x.position)
+                    if ml.media_asset and ml.media_asset.source_type == MediaSourceType.UPLOADED
+                ]
+                if uploaded_links:
+                    preserved_media_ids = [ml.media_asset_id for ml in sorted(existing_post.media_links, key=lambda x: x.position)]
 
-        # Store generated image in tenant storage
-        import io
-        from werkzeug.datastructures import FileStorage
+        if preserved_media_ids is not None:
+            final_media_ids = preserved_media_ids
+        else:
+            image_provider = get_image_provider()
+            img_result = image_provider.generate_image(prompt=topic, style="modern")
 
-        fs = FileStorage(
-            stream=io.BytesIO(img_result.image_bytes),
-            filename=f"ai_gen_{job.id[:8]}.png",
-            content_type=img_result.mime_type,
-        )
-        media_asset, err = save_media_file(
-            file_storage=fs,
-            tenant_id=job.tenant_id,
-            user_id=job.user_id,
-            source_type=MediaSourceType.AI_GENERATED,
-            labels=["ai-generated", "social-banner"],
-        )
-        if err:
-            raise RuntimeError(f"Failed to save generated media: {err}")
+            # Store generated image in tenant storage
+            import io
+            from werkzeug.datastructures import FileStorage
 
-        db.session.add(
-            UsageEvent(
+            fs = FileStorage(
+                stream=io.BytesIO(img_result.image_bytes),
+                filename=f"ai_gen_{job.id[:8]}.png",
+                content_type=img_result.mime_type,
+            )
+            media_asset, err = save_media_file(
+                file_storage=fs,
                 tenant_id=job.tenant_id,
                 user_id=job.user_id,
-                event_type=UsageEventType.IMAGE_GENERATION,
-                image_count=1,
-                estimated_cost_cents=int(img_result.cost_usd * 100),
-                status="success",
+                source_type=MediaSourceType.AI_GENERATED,
+                labels=["ai-generated", "social-banner"],
             )
-        )
-        db.session.commit()
+            if err:
+                raise RuntimeError(f"Failed to save generated media: {err}")
+
+            db.session.add(
+                UsageEvent(
+                    tenant_id=job.tenant_id,
+                    user_id=job.user_id,
+                    event_type=UsageEventType.IMAGE_GENERATION,
+                    image_count=1,
+                    estimated_cost_cents=int(img_result.cost_usd * 100),
+                    status="success",
+                )
+            )
+            db.session.commit()
+            final_media_ids = [media_asset.id]
 
         # 5. Create or update Post draft
         if not job.post_id:
@@ -177,7 +193,7 @@ def execute_generation_job(job_id: str) -> GenerationJob:
                 user_id=job.user_id or "",
                 caption=caption_result.caption,
                 hashtags=caption_result.hashtags,
-                media_asset_ids=[media_asset.id],
+                media_asset_ids=final_media_ids,
                 source_id=job.source_id,
             )
             if err:
@@ -190,7 +206,7 @@ def execute_generation_job(job_id: str) -> GenerationJob:
                 user_id=job.user_id or "",
                 caption=caption_result.caption,
                 hashtags=caption_result.hashtags,
-                media_asset_ids=[media_asset.id],
+                media_asset_ids=final_media_ids,
             )
             if err:
                 raise RuntimeError(f"Failed to update post content: {err}")

@@ -68,9 +68,11 @@ def publish_to_facebook_page(
     image_bytes: Optional[bytes] = None,
     image_filename: str = "post.png",
     first_comment: Optional[str] = None,
+    media_items: Optional[List[Tuple[str, bytes, str]]] = None,
 ) -> Tuple[bool, Optional[str], Optional[str]]:
-    """Publish a post (text or photo) to a Facebook Page via Meta Graph API.
-    
+    """Publish a post (text, single photo, or multi-photo) to a Facebook Page via Meta Graph API.
+
+    media_items: optional list of (filename, bytes, mime_type).
     Returns: (success: bool, platform_post_id: str | None, error_message: str | None)
     """
     if not page_id or not access_token:
@@ -86,11 +88,53 @@ def publish_to_facebook_page(
         logger.info(f"[MOCK META] Successfully simulated post to Page {page_id} -> ID {mock_id}")
         return True, mock_id, None
 
+    # Normalize attached photos list
+    images_to_publish: List[Tuple[str, bytes, str]] = []
+    if media_items:
+        images_to_publish = [m for m in media_items if m[1]]
+    elif image_bytes:
+        images_to_publish = [(image_filename, image_bytes, "image/png")]
+
     try:
         post_id = None
 
-        if image_bytes:
-            # Photo post endpoint: /{page_id}/photos
+        if len(images_to_publish) > 1:
+            # Multi-photo post: upload each photo unpublished, then attach to /{page_id}/feed
+            import json
+            photo_url = f"{GRAPH_BASE_URL}/{page_id}/photos"
+            attached_media_ids: List[str] = []
+
+            for fname, img_data, mime in images_to_publish:
+                up_resp = requests.post(
+                    photo_url,
+                    data={"access_token": access_token, "published": "false"},
+                    files={"source": (fname, io.BytesIO(img_data), mime or "image/jpeg")},
+                    timeout=30,
+                )
+                up_data = up_resp.json()
+                if up_resp.status_code != 200 or "id" not in up_data:
+                    err = up_data.get("error", {}).get("message", f"HTTP {up_resp.status_code}")
+                    return False, None, f"Meta Multi-Photo Upload Error: {err}"
+                attached_media_ids.append(up_data["id"])
+
+            feed_url = f"{GRAPH_BASE_URL}/{page_id}/feed"
+            feed_payload = {
+                "message": message,
+                "access_token": access_token,
+            }
+            for idx, fb_media_id in enumerate(attached_media_ids):
+                feed_payload[f"attached_media[{idx}]"] = json.dumps({"media_fbid": fb_media_id})
+
+            resp = requests.post(feed_url, data=feed_payload, timeout=30)
+            res_data = resp.json()
+            if resp.status_code != 200 or "id" not in res_data:
+                err = res_data.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                return False, None, f"Meta Multi-Photo Publish Error: {err}"
+            post_id = res_data.get("id")
+
+        elif len(images_to_publish) == 1:
+            # Single photo post endpoint: /{page_id}/photos
+            fname, img_data, mime = images_to_publish[0]
             photo_url = f"{GRAPH_BASE_URL}/{page_id}/photos"
             payload = {
                 "caption": message,
@@ -98,7 +142,7 @@ def publish_to_facebook_page(
                 "published": "true",
             }
             files = {
-                "source": (image_filename, io.BytesIO(image_bytes), "image/png")
+                "source": (fname, io.BytesIO(img_data), mime or "image/png")
             }
 
             resp = requests.post(photo_url, data=payload, files=files, timeout=30)
