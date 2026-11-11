@@ -294,6 +294,21 @@
                     <div id="direct-upload-error" class="text-danger small mt-2" style="display:none;"></div>
                 </div>
 
+                <!-- Free Stock Photos (Pexels) Search Box -->
+                <div class="border rounded-3 p-3 bg-white mb-3">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                        <div class="fw-semibold small"><i class="bi bi-camera text-success me-1"></i> Search Free Pexels Photos</div>
+                        <div class="input-group input-group-sm" style="max-width: 320px;">
+                            <input type="text" id="pexels-query-input" class="form-control" placeholder="e.g. smartphone, travel, business...">
+                            <button type="button" class="btn btn-outline-success" id="pexels-search-btn" onclick="searchPexels()">
+                                <i class="bi bi-search me-1"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                    <div id="pexels-status-msg" class="text-muted small" style="display:none;"></div>
+                    <div class="row g-2 mt-1" id="pexels-results-grid"></div>
+                </div>
+
                 {% if media_assets %}
                 <div class="small fw-semibold text-muted text-uppercase mb-2" style="font-size: 0.72rem; letter-spacing: .04em;">Or Pick from Media Library</div>
                 <div class="row g-2" id="library-media-grid">
@@ -424,6 +439,81 @@ function uploadAndAttachPhoto() {
     .finally(() => {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-upload me-1"></i> Upload & Attach';
+    });
+}
+
+function searchPexels() {
+    const query = document.getElementById('pexels-query-input').value.trim();
+    const grid = document.getElementById('pexels-results-grid');
+    const statusEl = document.getElementById('pexels-status-msg');
+    const btn = document.getElementById('pexels-search-btn');
+
+    if (!query) {
+        statusEl.textContent = 'Enter a keyword to search Pexels photos.';
+        statusEl.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    statusEl.textContent = 'Searching free Pexels photos...';
+    statusEl.style.display = 'block';
+    grid.innerHTML = '';
+
+    fetch(`/api/v1/media/pexels-search?q=${encodeURIComponent(query)}`)
+    .then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.message || 'Pexels search failed');
+        return data;
+    })
+    .then(data => {
+        const photos = data.photos || [];
+        if (photos.length === 0) {
+            statusEl.textContent = 'No photos found for that keyword. Try broader English terms.';
+            return;
+        }
+        statusEl.style.display = 'none';
+        photos.forEach(p => {
+            const col = document.createElement('div');
+            col.className = 'col-md-3 col-sm-4 col-6';
+            col.innerHTML = `
+                <div class="border rounded-2 p-1 position-relative cursor-pointer hover-shadow" title="Click to import & attach">
+                    <img src="${p.thumb}" alt="${(p.alt || '').replace(/"/g, '&quot;')}" class="rounded-1 w-100 object-fit-cover" style="height: 110px;">
+                    <div class="text-truncate small mt-1 text-muted" style="font-size: 0.7rem;">by ${p.photographer}</div>
+                </div>
+            `;
+            col.querySelector('div').onclick = () => importPexelsPhoto(p.full, p.alt);
+            grid.appendChild(col);
+        });
+    })
+    .catch(err => {
+        statusEl.textContent = err.message || 'Could not search Pexels.';
+    })
+    .finally(() => {
+        btn.disabled = false;
+    });
+}
+
+function importPexelsPhoto(url, altText) {
+    const statusEl = document.getElementById('pexels-status-msg');
+    statusEl.textContent = 'Importing selected photo into your workspace...';
+    statusEl.style.display = 'block';
+
+    fetch('/api/v1/media/import-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url, alt: altText || 'pexels_photo' })
+    })
+    .then(async r => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.message || 'Import failed');
+        return data;
+    })
+    .then(asset => {
+        statusEl.style.display = 'none';
+        addMediaAsset(asset.id, asset.storage_url);
+    })
+    .catch(err => {
+        statusEl.textContent = err.message || 'Failed to import photo.';
     });
 }
 

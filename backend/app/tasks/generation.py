@@ -172,9 +172,10 @@ def execute_generation_job(job_id: str) -> GenerationJob:
             import io
             from werkzeug.datastructures import FileStorage
 
+            ext = "jpg" if img_result.mime_type == "image/jpeg" else "png"
             fs = FileStorage(
                 stream=io.BytesIO(img_result.image_bytes),
-                filename=f"ai_gen_{job.id[:8]}.png",
+                filename=f"ai_gen_{job.id[:8]}.{ext}",
                 content_type=img_result.mime_type,
             )
             media_asset, err = save_media_file(

@@ -56,10 +56,20 @@
                                 </td>
                             </tr>
                             <tr>
-                                <td class="fw-semibold">Social Graphic Banner</td>
-                                <td><code>{{ 'DallEImageProvider (dall-e-3)' if openai_configured else 'MockImageProvider (Pillow)' }}</code></td>
+                                <td class="fw-semibold">Social Graphic / Stock Photo</td>
                                 <td>
-                                    {% if openai_configured %}
+                                    {% if pexels_configured %}
+                                    <code>PexelsImageProvider (Free Stock Photos)</code>
+                                    {% elif openai_configured %}
+                                    <code>DallEImageProvider (dall-e-3)</code>
+                                    {% else %}
+                                    <code>MockImageProvider (Pillow)</code>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if pexels_configured %}
+                                    <span class="badge bg-success-subtle text-success">Pexels Connected (Free)</span>
+                                    {% elif openai_configured %}
                                     <span class="badge bg-success-subtle text-success">Live AI</span>
                                     {% else %}
                                     <span class="badge bg-secondary-subtle text-secondary">Fallback</span>

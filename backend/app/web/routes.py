@@ -1087,14 +1087,17 @@ def delete_social_account(account_id: str):
 @require_perm("ai_settings.view")
 def settings_ai():
     openai_configured = bool(os.environ.get("OPENAI_API_KEY"))
+    pexels_configured = bool(os.environ.get("PEXELS_API_KEY"))
     text_model = os.environ.get("AI_TEXT_PROVIDER", "openai" if openai_configured else "mock")
-    image_model = os.environ.get("AI_IMAGE_PROVIDER", "dalle" if openai_configured else "mock")
+    default_img = "pexels" if pexels_configured else ("dalle" if openai_configured else "mock")
+    image_model = os.environ.get("AI_IMAGE_PROVIDER", default_img)
     return render_template(
         "web/settings/ai.html",
         title="AI Settings",
         tenant=g.tenant,
         membership=g.membership,
         openai_configured=openai_configured,
+        pexels_configured=pexels_configured,
         text_model=text_model,
         image_model=image_model,
     )

@@ -156,3 +156,85 @@ class DallEImageProvider(BaseImageProvider):
             fallback = MockImageProvider()
             return fallback.generate_image(prompt, style)
 
+
+def _clean_pexels_query(prompt: str) -> str:
+    """Turn a post topic or prompt into clean Pexels stock-search keywords."""
+    import re
+    cleaned = re.sub(r"https?://\S+", "", prompt or "")
+    cleaned = re.sub(r"[^\w\s]", " ", cleaned)
+    words = [w for w in cleaned.split() if len(w) > 1]
+    return " ".join(words[:5]) or "modern business"
+
+
+def search_pexels_photos(query: str, api_key: str, per_page: int = 8) -> list[dict]:
+    """Search Pexels for free stock photos matching a query."""
+    import requests
+
+    if not api_key:
+        return []
+
+    search_term = _clean_pexels_query(query)
+    try:
+        resp = requests.get(
+            "https://api.pexels.com/v1/search",
+            headers={"Authorization": api_key.strip()},
+            params={"query": search_term, "per_page": per_page},
+            timeout=12,
+        )
+        if resp.status_code != 200:
+            logger.warning(f"Pexels search returned HTTP {resp.status_code}: {resp.text[:200]}")
+            return []
+
+        photos = resp.json().get("photos", [])
+        results = []
+        for p in photos:
+            src = p.get("src", {})
+            results.append({
+                "id": p.get("id"),
+                "alt": p.get("alt") or search_term,
+                "photographer": p.get("photographer") or "Pexels",
+                "thumb": src.get("medium") or src.get("small"),
+                "full": src.get("large") or src.get("large2x") or src.get("original"),
+            })
+        return [r for r in results if r["thumb"] and r["full"]]
+    except Exception as exc:
+        logger.warning(f"Pexels search error: {exc}")
+        return []
+
+
+class PexelsImageProvider(BaseImageProvider):
+    """Fetches free topic-matched stock photography from the Pexels API."""
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def generate_image(self, prompt: str, style: str = "modern") -> ImageGenResult:
+        import os
+        import requests
+
+        query = _clean_pexels_query(prompt)
+        photos = search_pexels_photos(query, self.api_key, per_page=5)
+        if photos:
+            chosen = photos[0]
+            try:
+                img_resp = requests.get(chosen["full"], timeout=20)
+                img_resp.raise_for_status()
+                content_type = img_resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+                if not content_type.startswith("image/"):
+                    content_type = "image/jpeg"
+                return ImageGenResult(
+                    image_bytes=img_resp.content,
+                    mime_type=content_type,
+                    prompt_used=query,
+                    cost_usd=0.0,
+                )
+            except Exception as exc:
+                logger.warning(f"Failed downloading Pexels photo: {exc}")
+
+        # Fallback to DALL-E if OpenAI key exists, otherwise local Pillow banner
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            return DallEImageProvider(api_key=openai_key).generate_image(prompt, style)
+        return MockImageProvider().generate_image(prompt, style)
+
+

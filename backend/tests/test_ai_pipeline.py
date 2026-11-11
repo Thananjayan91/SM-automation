@@ -163,3 +163,67 @@ def test_multilingual_caption_generation(app, client, tenant_a, user_a):
         assert "Jaffna Tech Summit" in post.caption
         assert "பகிருங்கள்" in post.caption
 
+
+def test_pexels_image_provider_and_import_endpoint(app, client, tenant_a, user_a, monkeypatch):
+    import io
+    from PIL import Image
+    from unittest.mock import patch, MagicMock
+    from app.services.ai.image_provider import PexelsImageProvider
+
+    img_buf = io.BytesIO()
+    Image.new("RGB", (200, 200), color="teal").save(img_buf, format="JPEG")
+    sample_jpg_bytes = img_buf.getvalue()
+
+    search_resp = MagicMock()
+    search_resp.status_code = 200
+    search_resp.json.return_value = {
+        "photos": [
+            {
+                "id": 42,
+                "alt": "Vivo smartphone on desk",
+                "photographer": "Jane Doe",
+                "src": {
+                    "medium": "https://images.pexels.com/photos/42/medium.jpg",
+                    "large": "https://images.pexels.com/photos/42/large.jpg",
+                },
+            }
+        ]
+    }
+
+    dl_resp = MagicMock()
+    dl_resp.status_code = 200
+    dl_resp.content = sample_jpg_bytes
+    dl_resp.headers = {"Content-Type": "image/jpeg"}
+
+    with patch("requests.get", side_effect=[search_resp, dl_resp]):
+        provider = PexelsImageProvider(api_key="test_pexels_key")
+        res = provider.generate_image("Vivo smartphones launch!")
+        assert res.mime_type == "image/jpeg"
+        assert res.cost_usd == 0.0
+        assert res.image_bytes == sample_jpg_bytes
+
+    monkeypatch.setenv("PEXELS_API_KEY", "test_pexels_key")
+    with client.session_transaction() as sess:
+        sess["_user_id"] = user_a.id
+        sess["active_tenant_id"] = tenant_a.id
+
+    with patch("requests.get", return_value=search_resp):
+        r_search = client.get("/api/v1/media/pexels-search?q=smartphone")
+        assert r_search.status_code == 200
+        photos = r_search.get_json()["photos"]
+        assert len(photos) == 1
+        assert photos[0]["full"] == "https://images.pexels.com/photos/42/large.jpg"
+
+    # SSRF guard: reject non-Pexels host
+    r_bad = client.post("/api/v1/media/import-url", json={"url": "https://evil.com/x.jpg"})
+    assert r_bad.status_code == 400
+
+    with patch("requests.get", return_value=dl_resp):
+        r_import = client.post(
+            "/api/v1/media/import-url",
+            json={"url": "https://images.pexels.com/photos/42/large.jpg", "alt": "Vivo phone"},
+        )
+        assert r_import.status_code == 201
+        assert "id" in r_import.get_json()
+
+

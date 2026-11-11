@@ -108,6 +108,86 @@ def api_upload_media():
     }), 201
 
 
+@api_v1_bp.route("/media/pexels-search", methods=["GET"])
+@login_required
+def api_pexels_search():
+    """Search free Pexels stock photos matching query."""
+    import os
+    from ...services.ai.image_provider import search_pexels_photos
+
+    tenant_id, err = _get_active_tenant_id()
+    if err:
+        return jsonify({"error": "workspace_required", "message": err}), 403
+
+    api_key = os.getenv("PEXELS_API_KEY", "").strip()
+    if not api_key:
+        return jsonify({"error": "not_configured", "message": "PEXELS_API_KEY is not configured."}), 400
+
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"photos": []}), 200
+
+    photos = search_pexels_photos(query, api_key, per_page=8)
+    return jsonify({"photos": photos}), 200
+
+
+@api_v1_bp.route("/media/import-url", methods=["POST"])
+@login_required
+@limiter.limit("30 per minute")
+def api_import_media_url():
+    """Import a free Pexels image URL into the active workspace's Media Library."""
+    import io
+    from urllib.parse import urlparse
+    import requests
+    from werkzeug.datastructures import FileStorage
+
+    tenant_id, err = _get_active_tenant_id()
+    if err:
+        return jsonify({"error": "workspace_required", "message": err}), 403
+
+    if not permission_service.has_permission(current_user.id, tenant_id, "media.upload"):
+        return jsonify({"error": "forbidden", "message": "Access denied"}), 403
+
+    data = request.get_json(silent=True) or {}
+    image_url = (data.get("url") or "").strip()
+    alt_text = (data.get("alt") or "pexels_photo").strip()
+
+    parsed = urlparse(image_url)
+    if parsed.scheme != "https" or parsed.hostname != "images.pexels.com":
+        return jsonify({"error": "validation_error", "message": "Only official Pexels image URLs are allowed."}), 400
+
+    try:
+        resp = requests.get(image_url, timeout=20)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        return jsonify({"error": "download_failed", "message": f"Failed to fetch image: {exc}"}), 422
+
+    mime_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+    ext = "png" if "png" in mime_type else "jpg"
+    fs = FileStorage(
+        stream=io.BytesIO(resp.content),
+        filename=f"pexels_{alt_text[:30]}.{ext}",
+        content_type=mime_type if mime_type.startswith("image/") else "image/jpeg",
+    )
+
+    asset, upload_err = media_service.save_media_file(
+        file_storage=fs,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        source_type=MediaSourceType.UPLOADED,
+        labels=["pexels", "stock-photo"],
+        notes=f"Pexels: {alt_text}",
+    )
+    if upload_err:
+        return jsonify({"error": "upload_failed", "message": upload_err}), 422
+
+    return jsonify({
+        "id": asset.id,
+        "original_filename": asset.original_filename,
+        "storage_url": asset.storage_url,
+    }), 201
+
+
 @api_v1_bp.route("/media", methods=["GET"])
 @login_required
 def api_list_media():
