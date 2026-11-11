@@ -860,6 +860,26 @@ def sync_social_accounts_from_token():
         return redirect(url_for("web.settings_social_accounts"))
 
     try:
+        from flask import current_app
+        app_id = current_app.config.get("META_APP_ID")
+        app_secret = current_app.config.get("META_APP_SECRET")
+        upgraded = False
+        if app_id and app_secret:
+            long_resp = requests.get(
+                f"{GRAPH_BASE_URL}/oauth/access_token",
+                params={
+                    "grant_type": "fb_exchange_token",
+                    "client_id": app_id,
+                    "client_secret": app_secret,
+                    "fb_exchange_token": token,
+                },
+                timeout=12,
+            )
+            long_data = long_resp.json()
+            if long_resp.status_code == 200 and long_data.get("access_token"):
+                token = long_data["access_token"]
+                upgraded = True
+
         resp = requests.get(
             f"{GRAPH_BASE_URL}/me/accounts",
             params={"access_token": token, "limit": 100},
@@ -911,7 +931,8 @@ def sync_social_accounts_from_token():
             synced_count += 1
 
         db.session.commit()
-        flash(f"🎉 Successfully synced {synced_count} Facebook Pages to your workspace!", "success")
+        token_note = " with never-expiring Page tokens" if upgraded else ""
+        flash(f"Successfully synced {synced_count} Facebook Pages to your workspace{token_note}!", "success")
 
     except Exception as exc:
         flash(f"Error syncing pages: {exc}", "danger")
