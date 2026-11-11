@@ -15,6 +15,21 @@ def _normalize_database_url(url: str | None) -> str:
     return url
 
 
+def _is_serverless() -> bool:
+    """Detect if running in a serverless environment such as Vercel."""
+    return bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+
+
+def _get_engine_options() -> dict:
+    if _is_serverless():
+        from sqlalchemy.pool import NullPool
+        return {"poolclass": NullPool}
+    return {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
+
+
 class BaseConfig:
     """Shared configuration across all environments."""
 
@@ -23,13 +38,14 @@ class BaseConfig:
     WTF_CSRF_ENABLED: bool = True
     WTF_CSRF_TIME_LIMIT: int = 3600
 
-    # SQLAlchemy
-    SQLALCHEMY_DATABASE_URI: str = _normalize_database_url(os.environ.get("DATABASE_URL"))
+    # SQLAlchemy (supports pooled Neon URLs or Vercel POSTGRES_URL)
+    SQLALCHEMY_DATABASE_URI: str = _normalize_database_url(
+        os.environ.get("DATABASE_URL_POOLED")
+        or os.environ.get("DATABASE_URL")
+        or os.environ.get("POSTGRES_URL")
+    )
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
-    SQLALCHEMY_ENGINE_OPTIONS: dict = {
-        "pool_pre_ping": True,
-        "pool_recycle": 300,
-    }
+    SQLALCHEMY_ENGINE_OPTIONS: dict = _get_engine_options()
 
     # Redis (general)
     REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -49,7 +65,8 @@ class BaseConfig:
     REMEMBER_COOKIE_DURATION = timedelta(days=14)
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
 
-    # S3 / object storage
+    # Vercel Blob & S3 / object storage
+    BLOB_READ_WRITE_TOKEN: str = os.environ.get("BLOB_READ_WRITE_TOKEN", "")
     S3_BUCKET: str = os.environ.get("S3_BUCKET", "ai-social-publisher-media")
     S3_REGION: str = os.environ.get("S3_REGION", "us-east-1")
     AWS_ACCESS_KEY_ID: str = os.environ.get("AWS_ACCESS_KEY_ID", "")

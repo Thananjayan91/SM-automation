@@ -122,7 +122,9 @@ def api_cron_publish_scheduled():
     """
     import os
     from ...tasks.publishing import publish_due_scheduled_posts
-    secret = request.headers.get("X-Cron-Secret") or request.args.get("secret")
+    auth_header = request.headers.get("Authorization", "")
+    bearer_secret = auth_header[7:].strip() if auth_header.startswith("Bearer ") else None
+    secret = request.headers.get("X-Cron-Secret") or bearer_secret or request.args.get("secret")
     expected = os.environ.get("CRON_SECRET") or os.environ.get("PLATFORM_ADMIN_SECRET")
 
     if expected and secret != expected:

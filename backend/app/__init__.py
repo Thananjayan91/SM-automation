@@ -21,7 +21,14 @@ def create_app(config_name: str = "default") -> Flask:
     Returns:
         Configured Flask application instance.
     """
-    app = Flask(__name__, template_folder="templates", static_folder="static")
+    is_vercel = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
+    instance_path = "/tmp/instance" if is_vercel else None
+    app = Flask(
+        __name__,
+        template_folder="templates",
+        static_folder="static",
+        instance_path=instance_path,
+    )
 
     # Load configuration
     cfg = config_map.get(config_name, config_map["default"])
@@ -66,8 +73,8 @@ def create_app(config_name: str = "default") -> Flask:
     # Register error handlers
     _register_error_handlers(app)
 
-    # Enable proxy headers support behind load balancers (e.g. Render, Nginx)
-    if config_name == "production" or os.environ.get("FLASK_ENV") == "production":
+    # Enable proxy headers support behind load balancers (e.g. Vercel, Render, Nginx)
+    if config_name == "production" or os.environ.get("FLASK_ENV") == "production" or is_vercel:
         from werkzeug.middleware.proxy_fix import ProxyFix
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
@@ -86,6 +93,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(tenants_bp)
     app.register_blueprint(web_bp)
     app.register_blueprint(api_v1_bp)
+    csrf.exempt(api_v1_bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

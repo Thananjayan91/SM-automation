@@ -542,6 +542,9 @@ def media_file(asset_id: str):
     if not asset:
         abort(404)
 
+    if asset.storage_url and asset.storage_url.startswith("http"):
+        return redirect(asset.storage_url)
+
     dest_dir = media_service.get_media_storage_path(g.tenant.id)
     ext = asset.original_filename.rsplit(".", 1)[-1].lower() if "." in asset.original_filename else "jpg"
     file_path = os.path.join(dest_dir, f"{asset.id}.{ext}")
@@ -836,6 +839,83 @@ def add_social_account():
     db.session.add(acc)
     db.session.commit()
     flash(f"Successfully connected {platform.value.capitalize()} Page '{display_name}'!", "success")
+    return redirect(url_for("web.settings_social_accounts"))
+
+
+@web_bp.route("/settings/social-accounts/sync-token", methods=["POST"])
+@login_required
+@tenant_required
+@require_perm("social_accounts.connect")
+def sync_social_accounts_from_token():
+    """Discover and sync all Facebook Pages managed by a user token in one click."""
+    import uuid
+    import requests
+    from ..models.social_account import SocialAccount, SocialAccountStatus
+    from ..models.post import Platform
+    from ..services.meta_service import GRAPH_BASE_URL
+
+    token = request.form.get("user_access_token", "").strip()
+    if not token:
+        flash("Please provide a valid Meta Access Token.", "warning")
+        return redirect(url_for("web.settings_social_accounts"))
+
+    try:
+        resp = requests.get(
+            f"{GRAPH_BASE_URL}/me/accounts",
+            params={"access_token": token, "limit": 100},
+            timeout=15,
+        )
+        data = resp.json()
+
+        if resp.status_code != 200 or "data" not in data:
+            err = data.get("error", {}).get("message", "Could not fetch pages from Meta")
+            flash(f"Meta Error: {err}", "danger")
+            return redirect(url_for("web.settings_social_accounts"))
+
+        pages = data.get("data", [])
+        if not pages:
+            flash("No Facebook Pages found associated with this token.", "info")
+            return redirect(url_for("web.settings_social_accounts"))
+
+        synced_count = 0
+        for p in pages:
+            page_id = str(p.get("id"))
+            page_name = p.get("name", "Facebook Page")
+            page_token = p.get("access_token")
+
+            # Check if this page is already connected in this tenant
+            acc = SocialAccount.query.filter_by(
+                tenant_id=g.tenant.id,
+                platform=Platform.FACEBOOK,
+                platform_account_id=page_id,
+            ).first()
+
+            if not acc:
+                acc_id = str(uuid.uuid4())
+                clean_handle = "".join(c for c in page_name.lower() if c.isalnum() or c == "_")
+                acc = SocialAccount(
+                    id=acc_id,
+                    tenant_id=g.tenant.id,
+                    platform=Platform.FACEBOOK,
+                    platform_account_id=page_id,
+                    display_name=page_name,
+                    account_handle=f"@{clean_handle}" if clean_handle else f"@{g.tenant.slug}",
+                    status=SocialAccountStatus.CONNECTED,
+                    connected_by=current_user.id,
+                )
+                db.session.add(acc)
+
+            if page_token:
+                acc.set_access_token(page_token)
+            acc.status = SocialAccountStatus.CONNECTED
+            synced_count += 1
+
+        db.session.commit()
+        flash(f"🎉 Successfully synced {synced_count} Facebook Pages to your workspace!", "success")
+
+    except Exception as exc:
+        flash(f"Error syncing pages: {exc}", "danger")
+
     return redirect(url_for("web.settings_social_accounts"))
 
 
