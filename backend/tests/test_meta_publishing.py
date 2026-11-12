@@ -189,6 +189,28 @@ def test_publish_multi_photo_to_facebook_page(mock_post):
     assert mock_post.call_args_list[2].args[0].endswith("/104829/feed")
 
 
+@patch("requests.post")
+def test_publish_video_to_facebook_page(mock_post):
+    vid_resp = MagicMock()
+    vid_resp.status_code = 200
+    vid_resp.json.return_value = {"id": "104829_video_12345"}
+    mock_post.return_value = vid_resp
+
+    ok, post_id, err = meta_service.publish_to_facebook_page(
+        page_id="104829",
+        access_token="EAA_valid_token",
+        message="Check out our new reel!",
+        media_items=[
+            ("promo.mp4", b"fake_mp4_bytes", "video/mp4"),
+        ],
+    )
+    assert ok is True
+    assert post_id == "104829_video_12345"
+    assert err is None
+    assert mock_post.call_args.args[0].endswith("/104829/videos")
+    assert mock_post.call_args.kwargs["data"]["description"] == "Check out our new reel!"
+
+
 def test_ai_generation_preserves_manual_media(app, db, tenant_a, user_a, client):
     import io
     from PIL import Image

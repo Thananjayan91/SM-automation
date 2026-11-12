@@ -123,8 +123,13 @@
                                 <span class="small text-muted" style="font-size: 0.7rem;">No image</span>
                             </div>
                             {% for asset in media_assets %}
-                            <div class="media-thumb-select p-1 border rounded-3 position-relative cursor-pointer" id="thumb-{{ asset.id }}" onclick="selectMedia('{{ asset.id }}', '{{ asset.storage_url }}')" style="min-width: 90px; height: 90px;">
+                            <div class="media-thumb-select p-1 border rounded-3 position-relative cursor-pointer" id="thumb-{{ asset.id }}" onclick="selectMedia('{{ asset.id }}', '{{ asset.storage_url }}', '{{ asset.mime_type }}')" style="min-width: 90px; height: 90px;">
+                                {% if asset.mime_type.startswith('video/') %}
+                                <video src="{{ asset.storage_url }}" class="rounded-2 w-100 h-100 object-fit-cover" muted></video>
+                                <span class="position-absolute bottom-0 end-0 badge bg-dark bg-opacity-75 m-1" style="font-size:0.6rem;"><i class="bi bi-film"></i></span>
+                                {% else %}
                                 <img src="{{ asset.storage_url }}" alt="{{ asset.original_filename }}" class="rounded-2 w-100 h-100 object-fit-cover">
+                                {% endif %}
                             </div>
                             {% endfor %}
                         </div>
@@ -205,8 +210,9 @@
                             Type your post caption on the left to preview it here...
                         </div>
 
-                        <!-- Image Preview -->
+                        <!-- Media Preview -->
                         <div id="preview-image-container" style="display:none;" class="bg-light border-top border-bottom text-center">
+                            <video id="preview-video" src="" controls class="w-100 bg-dark d-none" style="max-height: 380px;"></video>
                             <img id="preview-image" src="" alt="Preview" class="img-fluid w-100" style="max-height: 380px; object-fit: cover;">
                         </div>
 
@@ -284,7 +290,7 @@ function setSourceType(type) {
     if (type === 'image_upload') document.getElementById('pill-image-tab').classList.add('active');
 }
 
-function selectMedia(mediaId, mediaUrl) {
+function selectMedia(mediaId, mediaUrl, mimeType) {
     document.getElementById('selected-media-id').value = mediaId;
     document.querySelectorAll('.media-thumb-select').forEach(el => el.classList.remove('active'));
     
@@ -293,21 +299,50 @@ function selectMedia(mediaId, mediaUrl) {
 
     const fbContainer = document.getElementById('preview-image-container');
     const fbImg = document.getElementById('preview-image');
+    const fbVid = document.getElementById('preview-video');
     const igImg = document.getElementById('ig-preview-image');
     const igPlaceholder = document.getElementById('ig-placeholder-text');
 
+    const isVideo = (mimeType && mimeType.startsWith('video/')) || (mediaUrl && (mediaUrl.endsWith('.mp4') || mediaUrl.includes('/videos/')));
+
     if (mediaUrl) {
-        fbImg.src = mediaUrl;
         fbContainer.style.display = 'block';
-        igImg.src = mediaUrl;
-        igImg.style.display = 'block';
-        if (igPlaceholder) igPlaceholder.style.display = 'none';
+        if (isVideo) {
+            if (fbVid) {
+                fbVid.src = mediaUrl;
+                fbVid.classList.remove('d-none');
+            }
+            if (fbImg) {
+                fbImg.classList.add('d-none');
+                fbImg.src = '';
+            }
+        } else {
+            if (fbImg) {
+                fbImg.src = mediaUrl;
+                fbImg.classList.remove('d-none');
+            }
+            if (fbVid) {
+                fbVid.classList.add('d-none');
+                fbVid.src = '';
+            }
+        }
+        if (igImg) {
+            igImg.src = isVideo ? '' : mediaUrl;
+            igImg.style.display = isVideo ? 'none' : 'block';
+        }
+        if (igPlaceholder) {
+            igPlaceholder.style.display = isVideo ? 'block' : 'none';
+            if (isVideo) igPlaceholder.textContent = 'Video attached (Preview available in Facebook preview)';
+        }
     } else {
         fbContainer.style.display = 'none';
-        fbImg.src = '';
-        igImg.style.display = 'none';
-        igImg.src = '';
-        if (igPlaceholder) igPlaceholder.style.display = 'block';
+        if (fbImg) { fbImg.src = ''; fbImg.classList.remove('d-none'); }
+        if (fbVid) { fbVid.src = ''; fbVid.classList.add('d-none'); }
+        if (igImg) { igImg.style.display = 'none'; igImg.src = ''; }
+        if (igPlaceholder) {
+            igPlaceholder.style.display = 'block';
+            igPlaceholder.textContent = 'Select an image to preview Instagram post';
+        }
     }
 }
 
@@ -455,6 +490,14 @@ function showGenerationError(msg) {
     document.getElementById('ai-error-container').style.display = 'block';
     document.getElementById('ai-error-message').textContent = msg;
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const preselectedId = '{{ request.args.get("media_id", "") }}';
+    if (preselectedId) {
+        const thumb = document.getElementById('thumb-' + preselectedId);
+        if (thumb) thumb.click();
+    }
+});
 </script>
 
 <!-- AI Generation Progress Modal -->

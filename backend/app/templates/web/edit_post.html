@@ -324,8 +324,15 @@
                 <div class="row g-2" id="library-media-grid">
                     {% for asset in media_assets %}
                     <div class="col-md-3 col-sm-4 col-6">
-                        <div class="border rounded-2 p-1 position-relative cursor-pointer hover-shadow" onclick="addMediaAsset('{{ asset.id }}', '{{ asset.storage_url }}')">
+                        <div class="border rounded-2 p-1 position-relative cursor-pointer hover-shadow" onclick="addMediaAsset('{{ asset.id }}', '{{ asset.storage_url }}', '{{ asset.mime_type }}')">
+                            {% if asset.mime_type.startswith('video/') %}
+                            <div class="position-relative" style="height: 110px;">
+                                <video src="{{ asset.storage_url }}" class="rounded-1 w-100 h-100 object-fit-cover" muted></video>
+                                <span class="position-absolute bottom-0 end-0 badge bg-dark bg-opacity-75 m-1" style="font-size:0.65rem;"><i class="bi bi-film"></i> Video</span>
+                            </div>
+                            {% else %}
                             <img src="{{ asset.storage_url }}" alt="{{ asset.original_filename }}" class="rounded-1 w-100 object-fit-cover" style="height: 110px;">
+                            {% endif %}
                             <div class="text-truncate small mt-1 text-dark" style="font-size: 0.72rem;">{{ asset.original_filename }}</div>
                         </div>
                     </div>
@@ -527,7 +534,7 @@ function importPexelsPhoto(url, altText) {
     });
 }
 
-function addMediaAsset(assetId, assetUrl) {
+function addMediaAsset(assetId, assetUrl, mimeType) {
     const area = document.getElementById('attached-media-preview-area');
     const replaceChecked = document.getElementById('replace-existing-media')?.checked;
 
@@ -546,13 +553,20 @@ function addMediaAsset(assetId, assetUrl) {
         return;
     }
 
+    const isVideo = (mimeType && mimeType.startsWith('video/')) || (assetUrl && (assetUrl.endsWith('.mp4') || assetUrl.includes('/videos/')));
+
     const div = document.createElement('div');
     div.className = 'position-relative border rounded-2 overflow-hidden bg-white';
     div.style.width = '100px';
     div.style.height = '100px';
     div.id = 'attached-box-' + assetId;
     div.innerHTML = `
-        <img src="${assetUrl}" alt="media" class="w-100 h-100 object-fit-cover">
+        ${isVideo ? `
+            <video src="${assetUrl}" class="w-100 h-100 object-fit-cover" muted></video>
+            <span class="position-absolute bottom-0 start-0 badge bg-dark bg-opacity-75 m-1" style="font-size:0.65rem;"><i class="bi bi-film"></i></span>
+        ` : `
+            <img src="${assetUrl}" alt="media" class="w-100 h-100 object-fit-cover">
+        `}
         <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 p-1 lh-1 m-1" onclick="removeAttachedMedia('${assetId}')">
             <i class="bi bi-x"></i>
         </button>
@@ -562,15 +576,42 @@ function addMediaAsset(assetId, assetUrl) {
 
     // Update live previews
     const fbBox = document.getElementById('live-media-box');
+    let fbVid = document.getElementById('live-media-video');
     const fbImg = document.getElementById('live-media-img');
     const igImg = document.getElementById('live-ig-img');
     const igPlaceholder = document.getElementById('live-ig-placeholder');
 
-    fbImg.src = assetUrl;
-    fbBox.style.display = 'block';
-    igImg.src = assetUrl;
-    igImg.style.display = 'block';
-    if (igPlaceholder) igPlaceholder.style.display = 'none';
+    if (isVideo) {
+        if (!fbVid) {
+            fbVid = document.createElement('video');
+            fbVid.id = 'live-media-video';
+            fbVid.controls = true;
+            fbVid.className = 'w-100 bg-dark';
+            fbVid.style.maxHeight = '380px';
+            fbBox.insertBefore(fbVid, fbImg);
+        }
+        fbVid.src = assetUrl;
+        fbVid.style.display = 'block';
+        if (fbImg) fbImg.style.display = 'none';
+        fbBox.style.display = 'block';
+        if (igImg) igImg.style.display = 'none';
+        if (igPlaceholder) {
+            igPlaceholder.style.display = 'block';
+            igPlaceholder.textContent = 'Video attached (Preview available on Facebook)';
+        }
+    } else {
+        if (fbVid) fbVid.style.display = 'none';
+        if (fbImg) {
+            fbImg.src = assetUrl;
+            fbImg.style.display = 'block';
+        }
+        fbBox.style.display = 'block';
+        if (igImg) {
+            igImg.src = assetUrl;
+            igImg.style.display = 'block';
+        }
+        if (igPlaceholder) igPlaceholder.style.display = 'none';
+    }
 
     // Dismiss modal
     const modalEl = document.getElementById('attachMediaModal');

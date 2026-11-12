@@ -98,7 +98,34 @@ def publish_to_facebook_page(
     try:
         post_id = None
 
-        if len(images_to_publish) > 1:
+        # Check if publishing a video asset
+        video_items = [
+            m for m in images_to_publish
+            if (m[2] and m[2].startswith("video/"))
+            or (m[0] and m[0].lower().endswith((".mp4", ".mov", ".m4v", ".webm")))
+        ]
+
+        if video_items:
+            # Facebook Video post endpoint: /{page_id}/videos
+            vname, vdata, vmime = video_items[0]
+            video_url = f"{GRAPH_BASE_URL}/{page_id}/videos"
+            payload = {
+                "description": message,
+                "access_token": access_token,
+            }
+            files = {
+                "source": (vname, io.BytesIO(vdata), vmime or "video/mp4")
+            }
+            resp = requests.post(video_url, data=payload, files=files, timeout=60)
+            res_data = resp.json()
+
+            if resp.status_code != 200 or "id" not in res_data:
+                err = res_data.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                return False, None, f"Meta Video Publish Error: {err}"
+
+            post_id = res_data.get("id")
+
+        elif len(images_to_publish) > 1:
             # Multi-photo post: upload each photo unpublished, then attach to /{page_id}/feed
             import json
             photo_url = f"{GRAPH_BASE_URL}/{page_id}/photos"
