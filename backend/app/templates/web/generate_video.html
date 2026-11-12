@@ -1,0 +1,557 @@
+{% extends "layouts/app.html" %}
+
+{% block content %}
+<div class="container-fluid py-3 px-lg-4">
+    <!-- Page Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+        <div>
+            <h4 class="fw-bold mb-1">
+                <i class="bi bi-camera-reels text-primary me-2"></i>Generate AI Video
+            </h4>
+            <p class="text-muted small mb-0">
+                Create a 15–30s social media video with AI narration, OpenAI voiceover, and Pexels stock photography.
+            </p>
+        </div>
+        <a href="{{ url_for('web.media') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-collection-play me-1"></i> View Media Library
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Left Column: Multi-Step Creation Controls -->
+        <div class="col-lg-7">
+
+            <!-- STEP 1: Topic & Narration -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width:24px;height:24px;">1</span>
+                        <h6 class="fw-semibold mb-0">Topic &amp; AI Narration</h6>
+                    </div>
+                    <span class="badge bg-light text-secondary border" id="step1-status">Step 1</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="video-topic" class="form-label fw-medium small">Topic or Prompt</label>
+                        <input type="text" class="form-control" id="video-topic"
+                               placeholder="e.g., 5 reasons to visit Jaffna, Benefits of green tea, Smart home tips...">
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-7">
+                            <label class="form-label fw-medium small d-block">Narration Language</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="video-lang" id="lang-en" value="english" checked>
+                                <label class="btn btn-outline-secondary btn-sm" for="lang-en">English</label>
+
+                                <input type="radio" class="btn-check" name="video-lang" id="lang-ta" value="tamil">
+                                <label class="btn btn-outline-secondary btn-sm" for="lang-ta">தமிழ்</label>
+
+                                <input type="radio" class="btn-check" name="video-lang" id="lang-si" value="sinhala">
+                                <label class="btn btn-outline-secondary btn-sm" for="lang-si">සිංහල</label>
+                            </div>
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label fw-medium small d-block">Target Length</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="video-dur" id="dur-15" value="15" checked>
+                                <label class="btn btn-outline-secondary btn-sm" for="dur-15">15s Reel</label>
+
+                                <input type="radio" class="btn-check" name="video-dur" id="dur-30" value="30">
+                                <label class="btn btn-outline-secondary btn-sm" for="dur-30">30s Video</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <button type="button" class="btn btn-primary btn-sm px-3" id="btn-gen-narration" onclick="generateNarration()">
+                            <i class="bi bi-stars me-1"></i> Generate Narration
+                        </button>
+                        <div class="spinner-border spinner-border-sm text-primary d-none" id="spin-narration" role="status"></div>
+                    </div>
+
+                    <div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label for="narration-script" class="form-label fw-medium small mb-0">Voiceover Script (Editable)</label>
+                            <span class="text-muted small" id="script-meta">0 words · ~0s</span>
+                        </div>
+                        <textarea class="form-control" id="narration-script" rows="4"
+                                  placeholder="Your generated narration script will appear here. You can also write or edit it manually..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 2: OpenAI TTS Voiceover -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width:24px;height:24px;">2</span>
+                        <h6 class="fw-semibold mb-0">AI Voiceover (OpenAI TTS)</h6>
+                    </div>
+                    <span class="badge bg-light text-secondary border" id="step2-status">Step 2</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-sm-6">
+                            <label for="tts-voice" class="form-label fw-medium small">Select Voice</label>
+                            <select class="form-select form-select-sm" id="tts-voice">
+                                <option value="nova" selected>Nova — Warm &amp; Natural (Recommended)</option>
+                                <option value="alloy">Alloy — Balanced &amp; Clear</option>
+                                <option value="echo">Echo — Smooth &amp; Authoritative</option>
+                                <option value="fable">Fable — Expressive Storytelling</option>
+                                <option value="onyx">Onyx — Deep &amp; Professional</option>
+                                <option value="shimmer">Shimmer — Bright &amp; Upbeat</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <button type="button" class="btn btn-outline-primary btn-sm w-100" id="btn-gen-voice" onclick="generateVoiceover()">
+                                <i class="bi bi-mic me-1"></i> Generate Voiceover MP3
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="voice-loading" class="d-none text-muted small py-2">
+                        <span class="spinner-border spinner-border-sm text-primary me-2"></span>
+                        Synthesizing voiceover with OpenAI TTS...
+                    </div>
+
+                    <div id="audio-preview-box" class="d-none bg-light p-3 rounded-3 border">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-semibold text-success">
+                                <i class="bi bi-check-circle-fill me-1"></i> Voiceover ready
+                            </span>
+                            <span class="badge bg-white text-dark border" id="audio-duration-badge">~15s</span>
+                        </div>
+                        <audio id="voiceover-player" controls class="w-100" style="height:38px;"></audio>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 3: Choose 4-5 Pexels Images -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width:24px;height:24px;">3</span>
+                        <h6 class="fw-semibold mb-0">Select 4–5 Topic Images (Pexels)</h6>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle" id="selected-count-badge">0 / 5 selected</span>
+                </div>
+                <div class="card-body">
+                    <div class="input-group input-group-sm mb-3">
+                        <input type="text" class="form-control" id="pexels-query" placeholder="Search Pexels free stock images...">
+                        <button class="btn btn-outline-primary" type="button" onclick="searchPexels()">
+                            <i class="bi bi-search me-1"></i> Search Pexels
+                        </button>
+                    </div>
+
+                    <div id="pexels-loading" class="d-none text-center py-4 text-muted small">
+                        <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+                        Fetching related stock images from Pexels...
+                    </div>
+
+                    <div class="row g-2" id="pexels-grid">
+                        <div class="col-12 text-center py-4 text-muted small border rounded bg-light">
+                            Enter a topic above and generate narration, or search Pexels directly to pick 4–5 images.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Render Configuration & Final Preview -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm sticky-top" style="top: 1.25rem;">
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width:24px;height:24px;">4</span>
+                        <h6 class="fw-semibold mb-0">Video Settings &amp; Preview</h6>
+                    </div>
+                    <span class="badge bg-light text-secondary border">FFmpeg + Blob</span>
+                </div>
+                <div class="card-body">
+                    <!-- Aspect Ratio Selector -->
+                    <div class="mb-3">
+                        <label class="form-label fw-medium small d-block">Video Aspect Ratio</label>
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-9-16" value="9:16" checked>
+                                <label class="btn btn-outline-secondary btn-sm w-100 py-2" for="ar-9-16">
+                                    <i class="bi bi-phone d-block fs-5 mb-1"></i>
+                                    <span class="d-block fw-semibold" style="font-size:0.75rem;">9:16</span>
+                                    <span class="text-muted" style="font-size:0.65rem;">Reels / Shorts</span>
+                                </label>
+                            </div>
+                            <div class="col-4">
+                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-1-1" value="1:1">
+                                <label class="btn btn-outline-secondary btn-sm w-100 py-2" for="ar-1-1">
+                                    <i class="bi bi-square d-block fs-5 mb-1"></i>
+                                    <span class="d-block fw-semibold" style="font-size:0.75rem;">1:1</span>
+                                    <span class="text-muted" style="font-size:0.65rem;">Feed Square</span>
+                                </label>
+                            </div>
+                            <div class="col-4">
+                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-16-9" value="16:9">
+                                <label class="btn btn-outline-secondary btn-sm w-100 py-2" for="ar-16-9">
+                                    <i class="bi bi-tv d-block fs-5 mb-1"></i>
+                                    <span class="d-block fw-semibold" style="font-size:0.75rem;">16:9</span>
+                                    <span class="text-muted" style="font-size:0.65rem;">Landscape</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Checklist Summary -->
+                    <div class="bg-light rounded-3 p-3 mb-3 small">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">Voiceover Audio:</span>
+                            <span id="check-audio" class="fw-medium text-danger">Not generated</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Selected Images:</span>
+                            <span id="check-images" class="fw-medium text-danger">0 images (pick 4–5)</span>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-success w-100 py-2 fw-semibold mb-3" id="btn-render-video" onclick="renderVideo()">
+                        <i class="bi bi-film me-1"></i> Generate &amp; Save Video
+                    </button>
+
+                    <!-- Render Loading State -->
+                    <div id="render-progress" class="d-none text-center py-4 bg-light rounded-3 border mb-3">
+                        <div class="spinner-border text-primary mb-2" role="status"></div>
+                        <div class="fw-semibold small">Rendering slideshow with FFmpeg...</div>
+                        <div class="text-muted" style="font-size:0.75rem;">Encoding MP4 &amp; uploading to Vercel Blob (usually 6–15s)</div>
+                    </div>
+
+                    <!-- Render Error Alert -->
+                    <div id="render-error" class="alert alert-danger small d-none mb-3"></div>
+
+                    <!-- Video Preview Player -->
+                    <div id="video-result-box" class="d-none">
+                        <div class="bg-dark rounded-3 overflow-hidden mb-3 text-center" style="max-height:460px;">
+                            <video id="generated-video-player" controls class="w-100" style="max-height:460px;"></video>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center text-muted small mb-3">
+                            <span class="text-success fw-semibold"><i class="bi bi-cloud-check-fill me-1"></i> Saved to Vercel Blob</span>
+                            <span id="video-size-label">MP4 Ready</span>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <form method="POST" action="{{ url_for('web.video_create_post') }}" id="create-post-video-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="asset_id" id="final-asset-id">
+                                <input type="hidden" name="topic" id="final-topic">
+                                <input type="hidden" name="script" id="final-script">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-pencil-square me-1"></i> Create Social Post from Video
+                                </button>
+                            </form>
+                            <a href="#" id="download-video-btn" download class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-download me-1"></i> Download MP4
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Placeholder before render -->
+                    <div id="video-placeholder" class="text-center py-5 bg-light rounded-3 border border-dashed text-muted">
+                        <i class="bi bi-play-circle fs-1 opacity-25 d-block mb-2"></i>
+                        <div class="small">Your generated MP4 video preview will appear here</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.pexels-card {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 2px solid transparent;
+}
+.pexels-card:hover {
+    transform: translateY(-2px);
+}
+.pexels-card.selected {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+.pexels-order-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+</style>
+
+<script>
+let currentAudioId = null;
+let currentAudioUrl = null;
+let selectedImages = []; // Array of full image URLs
+let fetchedPhotos = [];
+
+// Live word counter on script textarea
+document.getElementById('narration-script').addEventListener('input', updateScriptMeta);
+
+function updateScriptMeta() {
+    const text = document.getElementById('narration-script').value.trim();
+    const words = text ? text.split(/\s+/).length : 0;
+    const est = Math.round(words / 2.5);
+    document.getElementById('script-meta').textContent = `${words} words · ~${est}s`;
+}
+
+async function generateNarration() {
+    const topic = document.getElementById('video-topic').value.trim();
+    if (!topic) {
+        alert('Please enter a topic first.');
+        document.getElementById('video-topic').focus();
+        return;
+    }
+
+    const language = document.querySelector('input[name="video-lang"]:checked').value;
+    const duration = parseInt(document.querySelector('input[name="video-dur"]:checked').value, 10);
+
+    const btn = document.getElementById('btn-gen-narration');
+    const spin = document.getElementById('spin-narration');
+    btn.disabled = true;
+    spin.classList.remove('d-none');
+
+    try {
+        const resp = await fetch('/api/v1/video/narration', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic, language, duration })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert(data.message || 'Failed to generate narration.');
+            return;
+        }
+
+        document.getElementById('narration-script').value = data.script;
+        updateScriptMeta();
+        document.getElementById('step1-status').textContent = 'Ready';
+        document.getElementById('step1-status').className = 'badge bg-success-subtle text-success border border-success-subtle';
+
+        // Auto-populate Pexels search and trigger search
+        const pexelsInput = document.getElementById('pexels-query');
+        if (!pexelsInput.value.trim()) {
+            pexelsInput.value = topic;
+            searchPexels();
+        }
+    } catch (err) {
+        alert('Network error generating narration.');
+    } finally {
+        btn.disabled = false;
+        spin.classList.add('d-none');
+    }
+}
+
+async function generateVoiceover() {
+    const script = document.getElementById('narration-script').value.trim();
+    if (!script) {
+        alert('Please generate or enter a narration script in Step 1 first.');
+        return;
+    }
+    const voice = document.getElementById('tts-voice').value;
+
+    const btn = document.getElementById('btn-gen-voice');
+    const loading = document.getElementById('voice-loading');
+    btn.disabled = true;
+    loading.classList.remove('d-none');
+
+    try {
+        const resp = await fetch('/api/v1/video/voiceover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ script, voice })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            alert(data.message || 'Voiceover synthesis failed.');
+            return;
+        }
+
+        currentAudioId = data.audio_id;
+        currentAudioUrl = data.audio_url;
+
+        const player = document.getElementById('voiceover-player');
+        player.src = data.audio_url;
+        document.getElementById('audio-duration-badge').textContent = `~${data.duration_secs}s · ${voice}`;
+        document.getElementById('audio-preview-box').classList.remove('d-none');
+
+        document.getElementById('step2-status').textContent = 'Generated';
+        document.getElementById('step2-status').className = 'badge bg-success-subtle text-success border border-success-subtle';
+
+        const checkAudio = document.getElementById('check-audio');
+        checkAudio.textContent = `Ready (~${data.duration_secs}s)`;
+        checkAudio.className = 'fw-medium text-success';
+    } catch (err) {
+        alert('Error generating voiceover.');
+    } finally {
+        btn.disabled = false;
+        loading.classList.add('d-none');
+    }
+}
+
+async function searchPexels() {
+    const query = document.getElementById('pexels-query').value.trim() || document.getElementById('video-topic').value.trim();
+    if (!query) {
+        alert('Enter a search keyword for Pexels images.');
+        return;
+    }
+
+    const loading = document.getElementById('pexels-loading');
+    const grid = document.getElementById('pexels-grid');
+    loading.classList.remove('d-none');
+    grid.innerHTML = '';
+
+    try {
+        const resp = await fetch(`/api/v1/media/pexels-search?q=${encodeURIComponent(query)}&per_page=12`);
+        const data = await resp.json();
+        fetchedPhotos = data.photos || [];
+
+        if (fetchedPhotos.length === 0) {
+            grid.innerHTML = '<div class="col-12 text-center py-4 text-muted small">No photos found. Try a broader keyword.</div>';
+            return;
+        }
+
+        renderPexelsGrid();
+    } catch (err) {
+        grid.innerHTML = '<div class="col-12 text-center py-3 text-danger small">Failed to reach Pexels API.</div>';
+    } finally {
+        loading.classList.add('d-none');
+    }
+}
+
+function renderPexelsGrid() {
+    const grid = document.getElementById('pexels-grid');
+    grid.innerHTML = '';
+
+    fetchedPhotos.forEach((photo) => {
+        const selIndex = selectedImages.indexOf(photo.full);
+        const isSelected = selIndex !== -1;
+
+        const col = document.createElement('div');
+        col.className = 'col-4 col-sm-3';
+        col.innerHTML = `
+            <div class="position-relative rounded-2 overflow-hidden bg-light pexels-card ${isSelected ? 'selected' : ''}"
+                 style="aspect-ratio: 1/1;"
+                 onclick="toggleImage('${photo.full}')">
+                <img src="${photo.thumb}" alt="${photo.alt || 'Pexels image'}"
+                     class="w-100 h-100 object-fit-cover">
+                ${isSelected ? `<span class="pexels-order-badge">${selIndex + 1}</span>` : ''}
+            </div>
+        `;
+        grid.appendChild(col);
+    });
+    updateImageChecklist();
+}
+
+function toggleImage(fullUrl) {
+    const idx = selectedImages.indexOf(fullUrl);
+    if (idx !== -1) {
+        selectedImages.splice(idx, 1);
+    } else {
+        if (selectedImages.length >= 6) {
+            alert('You can select up to 6 images (4–5 recommended).');
+            return;
+        }
+        selectedImages.push(fullUrl);
+    }
+    renderPexelsGrid();
+}
+
+function updateImageChecklist() {
+    const count = selectedImages.length;
+    document.getElementById('selected-count-badge').textContent = `${count} / 5 selected`;
+    const check = document.getElementById('check-images');
+    if (count >= 4) {
+        check.textContent = `${count} images selected`;
+        check.className = 'fw-medium text-success';
+    } else if (count > 0) {
+        check.textContent = `${count} selected (4–5 recommended)`;
+        check.className = 'fw-medium text-warning';
+    } else {
+        check.textContent = '0 images (pick 4–5)';
+        check.className = 'fw-medium text-danger';
+    }
+}
+
+async function renderVideo() {
+    if (!currentAudioUrl && !currentAudioId) {
+        alert('Please generate a voiceover in Step 2 before rendering the video.');
+        return;
+    }
+    if (selectedImages.length === 0) {
+        alert('Please select at least 1 image (4–5 recommended) in Step 3.');
+        return;
+    }
+
+    const aspectRatio = document.querySelector('input[name="aspect-ratio"]:checked').value;
+    const topic = document.getElementById('video-topic').value.trim();
+
+    const btn = document.getElementById('btn-render-video');
+    const prog = document.getElementById('render-progress');
+    const errBox = document.getElementById('render-error');
+    const resBox = document.getElementById('video-result-box');
+    const placeholder = document.getElementById('video-placeholder');
+
+    btn.disabled = true;
+    prog.classList.remove('d-none');
+    errBox.classList.add('d-none');
+    placeholder.classList.add('d-none');
+
+    try {
+        const resp = await fetch('/api/v1/video/render', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                audio_id: currentAudioId,
+                audio_url: currentAudioUrl,
+                image_urls: selectedImages,
+                aspect_ratio: aspectRatio,
+                topic: topic
+            })
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+            errBox.textContent = data.message || 'Video generation failed. Check server logs.';
+            errBox.classList.remove('d-none');
+            return;
+        }
+
+        const videoPlayer = document.getElementById('generated-video-player');
+        videoPlayer.src = data.video_url;
+        videoPlayer.load();
+
+        const sizeMb = (data.size_bytes / (1024 * 1024)).toFixed(2);
+        document.getElementById('video-size-label').textContent = `${data.aspect_ratio} · ${sizeMb} MB`;
+        document.getElementById('download-video-btn').href = data.video_url;
+
+        document.getElementById('final-asset-id').value = data.asset_id;
+        document.getElementById('final-topic').value = topic;
+        document.getElementById('final-script').value = document.getElementById('narration-script').value.trim();
+
+        resBox.classList.remove('d-none');
+    } catch (err) {
+        errBox.textContent = 'Request error or timeout while rendering video.';
+        errBox.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        prog.classList.add('d-none');
+    }
+}
+</script>
+{% endblock %}

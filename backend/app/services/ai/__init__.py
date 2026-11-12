@@ -6,13 +6,17 @@ from .base import (
     BaseResearchProvider,
     BaseTextProvider,
     BaseImageProvider,
+    BaseTTSProvider,
     ResearchResult,
     CaptionResult,
     ImageGenResult,
+    NarrationResult,
+    TTSResult,
 )
 from .research_provider import WebResearchProvider, MockResearchProvider
 from .text_provider import OpenAITextProvider, MockTextProvider
 from .image_provider import DallEImageProvider, PexelsImageProvider, MockImageProvider, search_pexels_photos
+from .tts_provider import OpenAITTSProvider, MockTTSProvider, SUPPORTED_VOICES
 
 
 def get_research_provider() -> BaseResearchProvider:
@@ -45,13 +49,25 @@ def get_image_provider() -> BaseImageProvider:
     return MockImageProvider()
 
 
+def get_tts_provider() -> BaseTTSProvider:
+    api_key = os.getenv("OPENAI_API_KEY")
+    model = os.getenv("OPENAI_TTS_MODEL", "tts-1")
+    provider_name = os.getenv("AI_TTS_PROVIDER", "openai" if api_key else "mock").lower()
+    if provider_name == "openai" and api_key:
+        return OpenAITTSProvider(api_key=api_key, model=model)
+    return MockTTSProvider()
+
+
 __all__ = [
     "BaseResearchProvider",
     "BaseTextProvider",
     "BaseImageProvider",
+    "BaseTTSProvider",
     "ResearchResult",
     "CaptionResult",
     "ImageGenResult",
+    "NarrationResult",
+    "TTSResult",
     "WebResearchProvider",
     "MockResearchProvider",
     "OpenAITextProvider",
@@ -59,9 +75,13 @@ __all__ = [
     "DallEImageProvider",
     "PexelsImageProvider",
     "MockImageProvider",
+    "OpenAITTSProvider",
+    "MockTTSProvider",
+    "SUPPORTED_VOICES",
     "search_pexels_photos",
     "get_research_provider",
     "get_text_provider",
     "get_image_provider",
+    "get_tts_provider",
 ]
 

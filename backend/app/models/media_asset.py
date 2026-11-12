@@ -13,6 +13,7 @@ class MediaSourceType(str, Enum):
     UPLOADED = "uploaded"
     AI_GENERATED = "ai_generated"
     STOCK = "stock"
+    VIDEO_GENERATED = "video_generated"
 
 
 class MediaAsset(db.Model):

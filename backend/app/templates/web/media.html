@@ -26,7 +26,14 @@
                     <div class="card border-0 shadow-sm rounded-3 overflow-hidden h-100 media-card position-relative">
                         <!-- Image Container with aspect ratio -->
                         <div class="position-relative bg-light overflow-hidden" style="height: 180px;">
+                            {% if asset.mime_type.startswith('video/') %}
+                            <video src="{{ asset.storage_url }}" class="w-100 h-100 object-fit-cover" muted></video>
+                            <span class="position-absolute top-50 start-50 translate-middle badge bg-dark bg-opacity-75 rounded-circle p-2 fs-5">
+                                <i class="bi bi-play-fill text-white"></i>
+                            </span>
+                            {% else %}
                             <img src="{{ asset.storage_url }}" alt="{{ asset.original_filename }}" class="w-100 h-100 object-fit-cover media-img">
+                            {% endif %}
                             
                             <!-- Badges overlay -->
                             <div class="position-absolute bottom-0 start-0 m-2">

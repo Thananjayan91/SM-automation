@@ -37,6 +37,24 @@ class ImageGenResult:
     cost_usd: float = 0.04
 
 
+@dataclass
+class NarrationResult:
+    script: str
+    word_count: int
+    estimated_duration_secs: float
+    tokens_used: int = 100
+    cost_usd: float = 0.001
+
+
+@dataclass
+class TTSResult:
+    audio_bytes: bytes
+    mime_type: str = "audio/mpeg"
+    voice_used: str = "nova"
+    duration_secs: float = 15.0
+    cost_usd: float = 0.006
+
+
 class BaseResearchProvider(ABC):
     @abstractmethod
     def research(self, topic: str, source_url: Optional[str] = None) -> ResearchResult:
@@ -57,10 +75,27 @@ class BaseTextProvider(ABC):
         """Generate engaging platform-tailored caption and hashtags."""
         pass
 
+    @abstractmethod
+    def generate_narration(
+        self,
+        topic: str,
+        language: str = "english",
+        duration_hint: int = 15,
+    ) -> NarrationResult:
+        """Generate concise spoken script for video voiceover."""
+        pass
+
 
 class BaseImageProvider(ABC):
     @abstractmethod
     def generate_image(self, prompt: str, style: str = "modern") -> ImageGenResult:
         """Generate high quality marketing imagery."""
+        pass
+
+
+class BaseTTSProvider(ABC):
+    @abstractmethod
+    def generate_speech(self, text: str, voice: str = "nova") -> TTSResult:
+        """Convert spoken script text to audio bytes."""
         pass
 

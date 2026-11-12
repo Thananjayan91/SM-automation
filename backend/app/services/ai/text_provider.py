@@ -2,7 +2,7 @@
 import logging
 from typing import List, Optional
 
-from .base import BaseTextProvider, CaptionResult
+from .base import BaseTextProvider, CaptionResult, NarrationResult
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,68 @@ class MockTextProvider(BaseTextProvider):
             cost_usd=0.0048,
         )
 
+    def generate_narration(
+        self,
+        topic: str,
+        language: str = "english",
+        duration_hint: int = 15,
+    ) -> NarrationResult:
+        lang = _normalize_language(language)
+        is_long = int(duration_hint or 15) >= 25
+
+        if lang == "tamil":
+            if is_long:
+                script = (
+                    f"{topic} பற்றிய முக்கிய தகவல்களை இன்று தெரிந்து கொள்வோம். "
+                    f"இன்றைய வேகமான உலகில் {topic} மிகப்பெரிய மாற்றத்தை உருவாக்கி வருகிறது. "
+                    f"இதன் சிறப்பம்சங்கள் மற்றும் பயன்களை சரியான முறையில் பயன்படுத்தினால் சிறந்த முன்னேற்றம் காணலாம். "
+                    f"மேலும் தகவல்களுக்கு எங்கள் பக்கத்தை பின்தொடருங்கள்."
+                )
+            else:
+                script = (
+                    f"{topic} பற்றி உங்களுக்கு தெரியுமா? "
+                    f"இன்றைய காலத்தில் {topic} புதிய வாய்ப்புகளையும் சிறந்த தீர்வுகளையும் வழங்குகிறது. "
+                    f"இதைப் பற்றி மேலும் அறிய இப்போது எங்களோடு இணையுங்கள்."
+                )
+        elif lang == "sinhala":
+            if is_long:
+                script = (
+                    f"අද අපි {topic} පිළිබඳ වැදගත් කරුණු කිහිපයක් දැනගනිමු. "
+                    f"වර්තමාන ලෝකයේ {topic} ඉතා වේගයෙන් වෙනස් වෙමින් පවතිනවා. "
+                    f"මෙහි ඇති විශේෂාංග සහ ප්‍රතිලාභ නිවැරදිව භාවිතා කිරීමෙන් ඔබට විශාල දියුණුවක් ලබාගත හැකියි. "
+                    f"වැඩිදුර තොරතුරු සඳහා අපගේ පිටුව Follow කරන්න."
+                )
+            else:
+                script = (
+                    f"ඔබ {topic} ගැන දැන සිටියාද? "
+                    f"වර්තමානයේ {topic} අපට නව අවස්ථා රැසක් නිර්මාණය කර දී තිබෙනවා. "
+                    f"වැඩි විස්තර දැනගැනීමට අප සමඟ එකතු වන්න."
+                )
+        else:
+            if is_long:
+                script = (
+                    f"Have you ever wondered why {topic} is transforming the way we work and live today? "
+                    f"Across the industry, people are discovering smarter, faster ways to get real results with {topic}. "
+                    f"From everyday efficiency to long-term innovation, the potential is bigger than ever. "
+                    f"Start exploring what {topic} can do for you, and follow us for more updates and practical insights."
+                )
+            else:
+                script = (
+                    f"Here is why {topic} is gaining attention everywhere right now. "
+                    f"It brings together smarter solutions, better performance, and real value in just a few steps. "
+                    f"Follow us to learn more today."
+                )
+
+        word_count = len(script.split())
+        est_duration = round(max(5.0, word_count / 2.5), 1)
+        return NarrationResult(
+            script=script,
+            word_count=word_count,
+            estimated_duration_secs=est_duration,
+            tokens_used=120,
+            cost_usd=0.001,
+        )
+
 
 class OpenAITextProvider(BaseTextProvider):
     """OpenAI API integration for caption and copy generation."""
@@ -162,5 +224,57 @@ class OpenAITextProvider(BaseTextProvider):
             logger.error(f"OpenAI text generation failed: {e}. Falling back to deterministic provider.")
             fallback = MockTextProvider()
             return fallback.generate_caption(topic, research_summary, tone, target_platforms, language=lang)
+
+    def generate_narration(
+        self,
+        topic: str,
+        language: str = "english",
+        duration_hint: int = 15,
+    ) -> NarrationResult:
+        lang = _normalize_language(language)
+        dur = int(duration_hint or 15)
+        target_words = "35 to 42 words" if dur < 22 else "70 to 82 words"
+
+        lang_instructions = {
+            "tamil": "Write ONLY in fluent, natural spoken Tamil script (தமிழ்). Avoid mixing long English sentences.",
+            "sinhala": "Write ONLY in fluent, natural spoken Sinhala script (සිංහල). Avoid mixing long English sentences.",
+            "english": "Write in crisp, engaging, natural spoken English.",
+        }
+
+        try:
+            import openai
+            client = openai.OpenAI(api_key=self.api_key)
+            prompt = (
+                f"Write a short voiceover narration script for a {dur}-second social media video about: {topic}.\n"
+                f"Word count target: strictly around {target_words}.\n"
+                f"Language: {lang_instructions[lang]}\n"
+                f"IMPORTANT rules:\n"
+                f"- Output ONLY the exact spoken words to be read aloud by a text-to-speech voice.\n"
+                f"- Do NOT include hashtags, emojis, scene descriptions, brackets, timestamps, or speaker labels.\n"
+                f"- Start with an attention-grabbing opening hook and end with a concise call to action."
+            )
+            resp = client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=300,
+            )
+            script = (resp.choices[0].message.content or "").strip()
+            # Clean any accidental quotes
+            if script.startswith('"') and script.endswith('"'):
+                script = script[1:-1].strip()
+            tokens = resp.usage.total_tokens if resp.usage else 150
+            word_count = len(script.split())
+            est_duration = round(max(4.0, word_count / 2.5), 1)
+            return NarrationResult(
+                script=script,
+                word_count=word_count,
+                estimated_duration_secs=est_duration,
+                tokens_used=tokens,
+                cost_usd=0.001,
+            )
+        except Exception as e:
+            logger.error(f"OpenAI narration generation failed: {e}. Falling back to MockTextProvider.")
+            fallback = MockTextProvider()
+            return fallback.generate_narration(topic, language=lang, duration_hint=dur)
 
 

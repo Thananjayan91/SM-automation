@@ -57,6 +57,13 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link sidebar-link {% if request.endpoint == 'web.generate_video' %}active{% endif %}"
+                   href="{{ url_for('web.generate_video') }}">
+                    <i class="bi bi-camera-reels"></i>
+                    <span>Generate video</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link sidebar-link {% if request.endpoint == 'web.posts' %}active{% endif %}"
                    href="{{ url_for('web.posts') }}">
                     <i class="bi bi-file-text"></i>

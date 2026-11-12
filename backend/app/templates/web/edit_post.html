@@ -123,7 +123,12 @@
                                 {% if post.media_links %}
                                     {% for ml in post.media_links %}
                                     <div class="position-relative border rounded-2 overflow-hidden bg-white" style="width: 100px; height: 100px;" id="attached-box-{{ ml.media_asset.id }}">
+                                        {% if ml.media_asset.mime_type.startswith('video/') %}
+                                        <video src="{{ ml.media_asset.storage_url }}" class="w-100 h-100 object-fit-cover" muted></video>
+                                        <span class="position-absolute bottom-0 start-0 badge bg-dark bg-opacity-75 m-1" style="font-size:0.65rem;"><i class="bi bi-film"></i></span>
+                                        {% else %}
                                         <img src="{{ ml.media_asset.storage_url }}" alt="media" class="w-100 h-100 object-fit-cover">
+                                        {% endif %}
                                         <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 p-1 lh-1 m-1" onclick="removeAttachedMedia('{{ ml.media_asset.id }}')">
                                             <i class="bi bi-x"></i>
                                         </button>
@@ -210,7 +215,12 @@
 
                         <!-- Media Preview -->
                         <div id="live-media-box" class="bg-light border-top border-bottom text-center" style="{% if not post.media_links %}display:none;{% endif %}">
+                            {% if post.media_links and post.media_links[0].media_asset.mime_type.startswith('video/') %}
+                            <video id="live-media-video" src="{{ post.media_links[0].media_asset.storage_url }}" controls class="w-100 bg-dark" style="max-height: 380px;"></video>
+                            <img id="live-media-img" src="" alt="Media" class="img-fluid w-100 d-none" style="max-height: 380px; object-fit: cover;">
+                            {% else %}
                             <img id="live-media-img" src="{% if post.media_links %}{{ post.media_links[0].media_asset.storage_url }}{% endif %}" alt="Media" class="img-fluid w-100" style="max-height: 380px; object-fit: cover;">
+                            {% endif %}
                         </div>
 
                         <!-- Likes/Comments line -->

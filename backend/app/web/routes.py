@@ -7,6 +7,7 @@ from flask import (
     flash, session, g, request, send_file, abort, jsonify
 )
 from flask_login import login_required, current_user
+from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..models.source import SourceType, Source
@@ -58,6 +59,61 @@ def dashboard():
         },
         recent_activity=recent_posts,
     )
+
+
+# ── Video Generation ──────────────────────────────────────────────────────────
+
+@web_bp.route("/generate-video")
+@login_required
+@tenant_required
+def generate_video():
+    tenants = tenant_service.get_user_tenants(current_user.id)
+    return render_template(
+        "web/generate_video.html",
+        title="Generate Video",
+        tenant=g.tenant,
+        membership=g.membership,
+        tenants=tenants,
+    )
+
+
+@web_bp.route("/generate-video/create-post", methods=["POST"])
+@login_required
+@tenant_required
+@require_perm("content.create")
+def video_create_post():
+    asset_id = request.form.get("asset_id", "").strip()
+    topic = request.form.get("topic", "").strip()
+    script = request.form.get("script", "").strip()
+
+    caption = script or (f"Check out our latest video on {topic}!" if topic else "Check out our new video!")
+    post, post_err = content_service.create_draft_post(
+        tenant_id=g.tenant.id,
+        user_id=current_user.id,
+        caption=caption,
+        source_id=None,
+        media_asset_ids=[asset_id] if asset_id else [],
+    )
+    if post_err:
+        flash(post_err, "danger")
+        return redirect(url_for("web.generate_video"))
+
+    flash("Draft post created with your video! Choose social accounts and publish below.", "success")
+    return redirect(url_for("web.edit_post", post_id=post.id))
+
+
+@web_bp.route("/media/audio/<path:filename>")
+@login_required
+@tenant_required
+def media_audio(filename: str):
+    """Securely stream local voiceover audio files."""
+    safe_name = secure_filename(filename)
+    dest_dir = media_service.get_media_storage_path(g.tenant.id)
+    file_path = os.path.join(dest_dir, f"audio_{safe_name}")
+    if not os.path.exists(file_path):
+        abort(404)
+    mime = "audio/wav" if safe_name.endswith(".wav") else "audio/mpeg"
+    return send_file(file_path, mimetype=mime)
 
 
 @web_bp.route("/posts")
