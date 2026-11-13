@@ -111,43 +111,43 @@ def get_zoompan_filter(anim: str, width: int, height: int, d_frames: int, fps: i
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='min(zoom+0.0015,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-            f"d={d_frames}:s={width}x{height}:fps={fps}"
+            f"d=1:s={width}x{height}:fps={fps}"
         )
     elif anim == "zoom_out":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='if(eq(on,1),1.15,max(zoom-0.0015,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-            f"d={d_frames}:s={width}x{height}:fps={fps}"
+            f"d=1:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_left":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='(iw-iw/zoom)*(1-on/{d_frames})':y='ih/2-(ih/zoom/2)':"
-            f"d={d_frames}:s={width}x{height}:fps={fps}"
+            f"d=1:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_right":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
-            f"d={d_frames}:s={width}x{height}:fps={fps}"
+            f"d=1:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_up":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(1-on/{d_frames})':"
-            f"d={d_frames}:s={width}x{height}:fps={fps}"
+            f"d=1:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_down":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(on/{d_frames})':"
-            f"d={d_frames}:s={width}x{height}:fps={fps}"
+            f"d=1:s={width}x{height}:fps={fps}"
         )
     elif anim == "ken_burns":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='min(zoom+0.0012,1.14)':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
-            f"d={d_frames}:s={width}x{height}:fps={fps}"
+            f"d=1:s={width}x{height}:fps={fps}"
         )
     else:  # static
         return f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"

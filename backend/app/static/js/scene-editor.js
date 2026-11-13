@@ -284,26 +284,40 @@ window.SceneEditor = (function () {
         }
     }
 
+    function colorToHex(c, defaultHex = "#000000") {
+        if (!c) return defaultHex;
+        const str = String(c).trim();
+        if (str.startsWith("#") && str.length === 7) return str;
+        if (str.startsWith("#") && str.length === 4) {
+            return "#" + str[1] + str[1] + str[2] + str[2] + str[3] + str[3];
+        }
+        const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (m) {
+            const r = parseInt(m[1]).toString(16).padStart(2, "0");
+            const g = parseInt(m[2]).toString(16).padStart(2, "0");
+            const b = parseInt(m[3]).toString(16).padStart(2, "0");
+            return `#${r}${g}${b}`;
+        }
+        return defaultHex;
+    }
+
     function populateControlsFromText(item) {
         if (!item) return;
         setVal("text-content-input", item.content || "");
         setVal("text-font-family", item.font_family || "Montserrat");
         setVal("text-font-size", item.font_size || 42);
         setVal("text-font-weight", item.font_weight || "bold");
-        setVal("text-color", item.color || "#FFFFFF");
-        setVal("text-stroke-color", item.stroke_color || "#000000");
+        setVal("text-color", colorToHex(item.color, "#FFFFFF"));
+        setVal("text-stroke-color", colorToHex(item.stroke_color, "#000000"));
         setVal("text-stroke-width", item.stroke_width || 0);
 
         const sh = item.shadow || {};
         setChecked("text-shadow-enabled", !!sh.enabled);
-        setVal("text-shadow-color", sh.color || "rgba(0,0,0,0.7)");
-        setVal("text-shadow-blur", sh.blur || 6);
+        setVal("text-shadow-color", colorToHex(sh.color, "#000000"));
 
         const bg = item.background || {};
         setChecked("text-bg-enabled", !!bg.enabled);
-        setVal("text-bg-color", bg.color || "rgba(0,0,0,0.5)");
-        setVal("text-bg-padding", bg.padding || 12);
-        setVal("text-bg-radius", bg.border_radius || 8);
+        setVal("text-bg-color", colorToHex(bg.color, "#000000"));
     }
 
     function pullControlsIntoText(item) {
@@ -312,23 +326,33 @@ window.SceneEditor = (function () {
         item.font_family = getVal("text-font-family");
         item.font_size = parseInt(getVal("text-font-size"), 10) || 42;
         item.font_weight = getVal("text-font-weight");
-        item.color = getVal("text-color");
-        item.stroke_color = getVal("text-stroke-color");
+        item.color = getVal("text-color") || "#FFFFFF";
+        item.stroke_color = getVal("text-stroke-color") || "#000000";
         item.stroke_width = parseInt(getVal("text-stroke-width"), 10) || 0;
 
+        const shVal = getVal("text-shadow-color");
+        let shRgba = "rgba(0, 0, 0, 0.75)";
+        if (shVal && shVal.startsWith("#") && shVal.length === 7) {
+            shRgba = `rgba(${parseInt(shVal.slice(1,3),16)}, ${parseInt(shVal.slice(3,5),16)}, ${parseInt(shVal.slice(5,7),16)}, 0.75)`;
+        }
         item.shadow = {
             enabled: getChecked("text-shadow-enabled"),
-            color: getVal("text-shadow-color"),
-            blur: parseInt(getVal("text-shadow-blur"), 10) || 6,
+            color: shRgba,
+            blur: 6,
             offsetX: 2,
             offsetY: 2
         };
 
+        const bgVal = getVal("text-bg-color");
+        let bgRgba = "rgba(0, 0, 0, 0.70)";
+        if (bgVal && bgVal.startsWith("#") && bgVal.length === 7) {
+            bgRgba = `rgba(${parseInt(bgVal.slice(1,3),16)}, ${parseInt(bgVal.slice(3,5),16)}, ${parseInt(bgVal.slice(5,7),16)}, 0.70)`;
+        }
         item.background = {
             enabled: getChecked("text-bg-enabled"),
-            color: getVal("text-bg-color"),
-            padding: parseInt(getVal("text-bg-padding"), 10) || 12,
-            border_radius: parseInt(getVal("text-bg-radius"), 10) || 8
+            color: bgRgba,
+            padding: 14,
+            border_radius: 8
         };
     }
 

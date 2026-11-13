@@ -397,7 +397,8 @@ def render_text_overlay_layer(
         # 1. Background Box (if enabled)
         bg_config = item.get("background") or {}
         if bg_config.get("enabled"):
-            bg_color = parse_color(bg_config.get("color", "rgba(0,0,0,0.5)"))
+            raw_bg = bg_config.get("color")
+            bg_color = parse_color(raw_bg, default=(0, 0, 0, 180)) if raw_bg else (0, 0, 0, 180)
             pad = int(bg_config.get("padding", 14) * (canvas_w / 720.0))
             radius = int(bg_config.get("border_radius", 8) * (canvas_w / 720.0))
 

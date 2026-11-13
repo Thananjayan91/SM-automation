@@ -311,13 +311,19 @@
 
                             <!-- Shadow & Background Box -->
                             <div class="border rounded p-2 bg-light mb-3">
-                                <div class="form-check form-switch mb-1">
-                                    <input class="form-check-input" type="checkbox" id="text-shadow-enabled" checked onchange="SceneEditor.updateActiveTextFromControls()">
-                                    <label class="form-check-label small fw-medium" for="text-shadow-enabled">Drop Shadow</label>
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="text-shadow-enabled" checked onchange="SceneEditor.updateActiveTextFromControls()">
+                                        <label class="form-check-label small fw-medium" for="text-shadow-enabled">Drop Shadow</label>
+                                    </div>
+                                    <input type="color" class="form-control form-control-sm form-control-color" style="width:36px;height:24px;padding:2px;" id="text-shadow-color" value="#000000" oninput="SceneEditor.updateActiveTextFromControls()" title="Shadow Color">
                                 </div>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="text-bg-enabled" onchange="SceneEditor.updateActiveTextFromControls()">
-                                    <label class="form-check-label small fw-medium" for="text-bg-enabled">Backdrop Box</label>
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="text-bg-enabled" onchange="SceneEditor.updateActiveTextFromControls()">
+                                        <label class="form-check-label small fw-medium" for="text-bg-enabled">Backdrop Box</label>
+                                    </div>
+                                    <input type="color" class="form-control form-control-sm form-control-color" style="width:36px;height:24px;padding:2px;" id="text-bg-color" value="#000000" oninput="SceneEditor.updateActiveTextFromControls()" title="Backdrop Box Color">
                                 </div>
                             </div>
 
