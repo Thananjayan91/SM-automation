@@ -19,6 +19,7 @@ from .post import (
 )
 from .social_account import SocialAccount, SocialAccountStatus
 from .research import ResearchRun, ResearchCitation, GenerationJob, JobStatus, JobStep
+from .video_template import VideoTemplate
 
 __all__ = [
     "User",
@@ -56,4 +57,5 @@ __all__ = [
     "GenerationJob",
     "JobStatus",
     "JobStep",
+    "VideoTemplate",
 ]

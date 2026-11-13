@@ -108,11 +108,44 @@ def api_generate_voiceover():
     })
 
 
+@api_v1_bp.route("/video/suggest-texts", methods=["POST"])
+@login_required
+@limiter.limit("30 per minute")
+def api_suggest_scene_texts():
+    """Generate 2-3 punchy visual text overlay phrases for a video scene."""
+    tenant_id, err = _get_active_tenant_id()
+    if err:
+        return jsonify({"error": "workspace_required", "message": err}), 403
+
+    data = request.get_json(silent=True) or {}
+    topic = (data.get("topic") or "").strip()
+    if not topic:
+        return jsonify({"error": "validation_error", "message": "Topic is required."}), 400
+
+    scene_number = int(data.get("scene_number", 1))
+    total_scenes = int(data.get("total_scenes", 5))
+    language = (data.get("language") or "english").strip().lower()
+
+    text_provider = get_text_provider()
+    suggestions = text_provider.suggest_scene_texts(
+        topic=topic,
+        scene_number=scene_number,
+        total_scenes=total_scenes,
+        language=language,
+    )
+
+    return jsonify({
+        "suggestions": suggestions,
+        "scene_number": scene_number,
+        "total_scenes": total_scenes,
+    })
+
+
 @api_v1_bp.route("/video/render", methods=["POST"])
 @login_required
 @limiter.limit("10 per minute")
 def api_render_video():
-    """Render slideshow MP4 video from selected images and audio track."""
+    """Render slideshow MP4 video from selected images or scene configurations and audio track."""
     tenant_id, err = _get_active_tenant_id()
     if err:
         return jsonify({"error": "workspace_required", "message": err}), 403
@@ -121,9 +154,11 @@ def api_render_video():
         return jsonify({"error": "forbidden", "message": "Permission denied"}), 403
 
     data = request.get_json(silent=True) or {}
+    scenes = data.get("scenes") or []
     image_urls = data.get("image_urls") or []
-    if not isinstance(image_urls, list) or len(image_urls) == 0:
-        return jsonify({"error": "validation_error", "message": "Please select at least 1 image."}), 400
+
+    if not scenes and not image_urls:
+        return jsonify({"error": "validation_error", "message": "Please provide either scenes or image_urls."}), 400
 
     audio_id = data.get("audio_id")
     audio_url = data.get("audio_url")
@@ -133,7 +168,8 @@ def api_render_video():
     asset, render_err = video_service.generate_video_from_assets(
         tenant_id=tenant_id,
         user_id=current_user.id,
-        image_urls=image_urls,
+        image_urls=image_urls if not scenes else None,
+        scenes=scenes if scenes else None,
         audio_id_with_ext=audio_id,
         audio_url=audio_url,
         aspect_ratio=aspect_ratio,

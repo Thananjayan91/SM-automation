@@ -1,5 +1,56 @@
 {% extends "layouts/app.html" %}
 
+{% block extra_css %}
+<!-- Google Fonts for Scene Editor & Preview -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;600;700&family=Playfair+Display:wght@700&family=Poppins:wght@600;700;800&family=Roboto:wght@500;700&display=swap" rel="stylesheet">
+<style>
+.pexels-card {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 2px solid transparent;
+}
+.pexels-card:hover {
+    transform: translateY(-2px);
+}
+.pexels-card.selected {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+.pexels-order-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.canvas-wrapper {
+    background: #151515;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    overflow: hidden;
+    display: inline-block;
+}
+.property-group-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    margin-bottom: 0.4rem;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-3 px-lg-4">
     <!-- Page Header -->
@@ -9,7 +60,7 @@
                 <i class="bi bi-camera-reels text-primary me-2"></i>Generate AI Video
             </h4>
             <p class="text-muted small mb-0">
-                Create a 15–30s social media video with AI narration, OpenAI voiceover, and Pexels stock photography.
+                Create a 15–30s social media video with AI narration, OpenAI voiceover, Pexels imagery, visual text overlays &amp; animations.
             </p>
         </div>
         <a href="{{ url_for('web.media') }}" class="btn btn-outline-secondary btn-sm">
@@ -157,6 +208,147 @@
                 </div>
             </div>
 
+            <!-- STEP 4: Scene Editor (Fabric.js Visual Overlays & Animations) -->
+            <div class="card border-0 shadow-sm mb-4 d-none" id="step-scene-editor-card">
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width:24px;height:24px;">4</span>
+                        <h6 class="fw-semibold mb-0">Visual Text Overlays &amp; Animations</h6>
+                    </div>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">Interactive Canvas</span>
+                </div>
+                <div class="card-body">
+                    <!-- Scene Tabs & Action Buttons -->
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <div class="d-flex gap-1 overflow-auto pb-1" id="scene-tabs-container">
+                            <!-- Populated dynamically by SceneEditor -->
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="SceneEditor.addText()">
+                                <i class="bi bi-plus-lg me-1"></i> Add Text
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="SceneEditor.deleteActiveText()" title="Delete selected text">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Left: Canvas Preview -->
+                        <div class="col-md-6 text-center">
+                            <div class="canvas-wrapper p-1">
+                                <canvas id="scene-fabric-canvas"></canvas>
+                            </div>
+                            <div class="text-muted small mt-2">
+                                <i class="bi bi-arrows-move me-1"></i> Drag, reposition or resize text on canvas
+                            </div>
+                        </div>
+
+                        <!-- Right: Text & Motion Properties Panel -->
+                        <div class="col-md-6">
+                            <!-- Templates Selector -->
+                            <div class="mb-3">
+                                <label class="form-label property-group-title">Style Template</label>
+                                <div class="d-flex gap-1 mb-1">
+                                    <select class="form-select form-select-sm" id="scene-template-select" onchange="SceneEditor.applyTemplateToCurrent(this.value)">
+                                        <option value="">-- Apply a Template Style --</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="SceneEditor.saveCurrentAsTemplate()" title="Save current text style as custom template">
+                                        <i class="bi bi-bookmark-plus"></i>
+                                    </button>
+                                </div>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" style="font-size:0.75rem;" onclick="SceneEditor.applyTemplateToAllScenes()">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Apply template to all scenes
+                                </button>
+                            </div>
+
+                            <!-- Text Content & AI Suggestion -->
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label property-group-title mb-0">Overlay Text</label>
+                                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;" id="btn-auto-suggest-text" onclick="SceneEditor.autoSuggestText()">
+                                        <i class="bi bi-magic me-1"></i> AI Suggest
+                                    </button>
+                                </div>
+                                <textarea class="form-control form-control-sm" id="text-content-input" rows="2" placeholder="Text for this slide..." oninput="SceneEditor.updateActiveTextFromControls()"></textarea>
+                            </div>
+
+                            <!-- Typography -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label property-group-title">Font Family</label>
+                                    <select class="form-select form-select-sm" id="text-font-family" onchange="SceneEditor.updateActiveTextFromControls()">
+                                        <option value="Montserrat" selected>Montserrat</option>
+                                        <option value="Open Sans">Open Sans</option>
+                                        <option value="Roboto">Roboto</option>
+                                        <option value="Inter">Inter</option>
+                                        <option value="Playfair Display">Playfair Display</option>
+                                        <option value="Poppins">Poppins</option>
+                                        <option value="Impact">Impact</option>
+                                    </select>
+                                </div>
+                                <div class="col-3">
+                                    <label class="form-label property-group-title">Size</label>
+                                    <input type="number" class="form-control form-control-sm" id="text-font-size" value="42" min="16" max="90" oninput="SceneEditor.updateActiveTextFromControls()">
+                                </div>
+                                <div class="col-3">
+                                    <label class="form-label property-group-title">Color</label>
+                                    <input type="color" class="form-control form-control-sm form-control-color w-100" id="text-color" value="#FFFFFF" oninput="SceneEditor.updateActiveTextFromControls()">
+                                </div>
+                            </div>
+
+                            <!-- Stroke / Outline -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label property-group-title">Outline Width</label>
+                                    <input type="number" class="form-control form-control-sm" id="text-stroke-width" value="2" min="0" max="8" oninput="SceneEditor.updateActiveTextFromControls()">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label property-group-title">Outline Color</label>
+                                    <input type="color" class="form-control form-control-sm form-control-color w-100" id="text-stroke-color" value="#000000" oninput="SceneEditor.updateActiveTextFromControls()">
+                                </div>
+                            </div>
+
+                            <!-- Shadow & Background Box -->
+                            <div class="border rounded p-2 bg-light mb-3">
+                                <div class="form-check form-switch mb-1">
+                                    <input class="form-check-input" type="checkbox" id="text-shadow-enabled" checked onchange="SceneEditor.updateActiveTextFromControls()">
+                                    <label class="form-check-label small fw-medium" for="text-shadow-enabled">Drop Shadow</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="text-bg-enabled" onchange="SceneEditor.updateActiveTextFromControls()">
+                                    <label class="form-check-label small fw-medium" for="text-bg-enabled">Backdrop Box</label>
+                                </div>
+                            </div>
+
+                            <!-- Motion & Animations -->
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label property-group-title">Image Motion</label>
+                                    <select class="form-select form-select-sm" id="scene-image-anim" onchange="SceneEditor.updateActiveTextFromControls()">
+                                        <option value="zoom_in" selected>Zoom In (1.0x → 1.15x)</option>
+                                        <option value="zoom_out">Zoom Out (1.15x → 1.0x)</option>
+                                        <option value="pan_left">Pan Left</option>
+                                        <option value="pan_right">Pan Right</option>
+                                        <option value="pan_up">Pan Up</option>
+                                        <option value="pan_down">Pan Down</option>
+                                        <option value="ken_burns">Ken Burns (Zoom + Pan)</option>
+                                        <option value="static">Static (No Motion)</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label property-group-title">Text Animation</label>
+                                    <select class="form-select form-select-sm" id="scene-text-anim" onchange="SceneEditor.updateActiveTextFromControls()">
+                                        <option value="fade_in" selected>Fade In (Smooth)</option>
+                                        <option value="none">Immediate (None)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Right Column: Render Configuration & Final Preview -->
@@ -164,7 +356,7 @@
             <div class="card border-0 shadow-sm sticky-top" style="top: 1.25rem;">
                 <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
                     <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width:24px;height:24px;">4</span>
+                        <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width:24px;height:24px;">5</span>
                         <h6 class="fw-semibold mb-0">Video Settings &amp; Preview</h6>
                     </div>
                     <span class="badge bg-light text-secondary border">FFmpeg + Blob</span>
@@ -175,7 +367,7 @@
                         <label class="form-label fw-medium small d-block">Video Aspect Ratio</label>
                         <div class="row g-2">
                             <div class="col-4">
-                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-9-16" value="9:16" checked>
+                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-9-16" value="9:16" checked onchange="onAspectRatioChange()">
                                 <label class="btn btn-outline-secondary btn-sm w-100 py-2" for="ar-9-16">
                                     <i class="bi bi-phone d-block fs-5 mb-1"></i>
                                     <span class="d-block fw-semibold" style="font-size:0.75rem;">9:16</span>
@@ -183,7 +375,7 @@
                                 </label>
                             </div>
                             <div class="col-4">
-                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-1-1" value="1:1">
+                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-1-1" value="1:1" onchange="onAspectRatioChange()">
                                 <label class="btn btn-outline-secondary btn-sm w-100 py-2" for="ar-1-1">
                                     <i class="bi bi-square d-block fs-5 mb-1"></i>
                                     <span class="d-block fw-semibold" style="font-size:0.75rem;">1:1</span>
@@ -191,7 +383,7 @@
                                 </label>
                             </div>
                             <div class="col-4">
-                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-16-9" value="16:9">
+                                <input type="radio" class="btn-check" name="aspect-ratio" id="ar-16-9" value="16:9" onchange="onAspectRatioChange()">
                                 <label class="btn btn-outline-secondary btn-sm w-100 py-2" for="ar-16-9">
                                     <i class="bi bi-tv d-block fs-5 mb-1"></i>
                                     <span class="d-block fw-semibold" style="font-size:0.75rem;">16:9</span>
@@ -220,8 +412,8 @@
                     <!-- Render Loading State -->
                     <div id="render-progress" class="d-none text-center py-4 bg-light rounded-3 border mb-3">
                         <div class="spinner-border text-primary mb-2" role="status"></div>
-                        <div class="fw-semibold small">Rendering slideshow with FFmpeg...</div>
-                        <div class="text-muted" style="font-size:0.75rem;">Encoding MP4 &amp; uploading to Vercel Blob (usually 6–15s)</div>
+                        <div class="fw-semibold small">Rendering video with Ken Burns &amp; text overlays...</div>
+                        <div class="text-muted" style="font-size:0.75rem;">Encoding MP4 &amp; uploading to Vercel Blob (usually 8–18s)</div>
                     </div>
 
                     <!-- Render Error Alert -->
@@ -264,41 +456,18 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
-<style>
-.pexels-card {
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    border: 2px solid transparent;
-}
-.pexels-card:hover {
-    transform: translateY(-2px);
-}
-.pexels-card.selected {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
-}
-.pexels-order-badge {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: #0d6efd;
-    color: white;
-    font-size: 0.75rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-</style>
+{% block extra_js %}
+<!-- Fabric.js Canvas Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<!-- Scene Editor logic -->
+<script src="{{ url_for('static', filename='js/scene-editor.js') }}"></script>
 
 <script>
 let currentAudioId = null;
 let currentAudioUrl = null;
-let selectedImages = []; // Array of full image URLs
+let selectedImages = [];
 let fetchedPhotos = [];
 
 // Live word counter on script textarea
@@ -309,6 +478,13 @@ function updateScriptMeta() {
     const words = text ? text.split(/\s+/).length : 0;
     const est = Math.round(words / 2.5);
     document.getElementById('script-meta').textContent = `${words} words · ~${est}s`;
+}
+
+function onAspectRatioChange() {
+    const ar = document.querySelector('input[name="aspect-ratio"]:checked').value;
+    if (selectedImages.length > 0) {
+        SceneEditor.init(selectedImages, ar);
+    }
 }
 
 async function generateNarration() {
@@ -477,6 +653,16 @@ function updateImageChecklist() {
     const count = selectedImages.length;
     document.getElementById('selected-count-badge').textContent = `${count} / 5 selected`;
     const check = document.getElementById('check-images');
+    const editorCard = document.getElementById('step-scene-editor-card');
+
+    if (count >= 1) {
+        editorCard.classList.remove('d-none');
+        const ar = document.querySelector('input[name="aspect-ratio"]:checked').value;
+        SceneEditor.init(selectedImages, ar);
+    } else {
+        editorCard.classList.add('d-none');
+    }
+
     if (count >= 4) {
         check.textContent = `${count} images selected`;
         check.className = 'fw-medium text-success';
@@ -513,6 +699,9 @@ async function renderVideo() {
     errBox.classList.add('d-none');
     placeholder.classList.add('d-none');
 
+    // Export scenes from SceneEditor
+    const scenes = SceneEditor.exportScenes();
+
     try {
         const resp = await fetch('/api/v1/video/render', {
             method: 'POST',
@@ -520,6 +709,7 @@ async function renderVideo() {
             body: JSON.stringify({
                 audio_id: currentAudioId,
                 audio_url: currentAudioUrl,
+                scenes: scenes,
                 image_urls: selectedImages,
                 aspect_ratio: aspectRatio,
                 topic: topic

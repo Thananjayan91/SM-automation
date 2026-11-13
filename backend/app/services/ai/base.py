@@ -85,6 +85,17 @@ class BaseTextProvider(ABC):
         """Generate concise spoken script for video voiceover."""
         pass
 
+    @abstractmethod
+    def suggest_scene_texts(
+        self,
+        topic: str,
+        scene_number: int = 1,
+        total_scenes: int = 5,
+        language: str = "english",
+    ) -> List[str]:
+        """Suggest 2-3 punchy visual text overlay phrases for a video scene."""
+        pass
+
 
 class BaseImageProvider(ABC):
     @abstractmethod

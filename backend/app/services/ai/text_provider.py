@@ -157,6 +157,38 @@ class MockTextProvider(BaseTextProvider):
             cost_usd=0.001,
         )
 
+    def suggest_scene_texts(
+        self,
+        topic: str,
+        scene_number: int = 1,
+        total_scenes: int = 5,
+        language: str = "english",
+    ) -> List[str]:
+        lang = _normalize_language(language)
+        clean_topic = topic.strip()
+        if lang == "tamil":
+            if scene_number == 1:
+                return [f"{clean_topic} — சிறப்பம்சம்", "முக்கிய தகவல்", "இன்றே தெரிந்து கொள்ளுங்கள்"]
+            elif scene_number >= total_scenes:
+                return ["இன்றே தொடங்குங்கள்!", "மேலும் அறிய பின்தொடருங்கள்", "முக்கிய முடிவு"]
+            else:
+                return [f"பயன் #{scene_number}", "வேகமான வளர்ச்சி", "சிறந்த பலன்கள்"]
+        elif lang == "sinhala":
+            if scene_number == 1:
+                return [f"{clean_topic} — විශේෂ කරුණු", "නවතම තොරතුරු", "අදම දැනගන්න"]
+            elif scene_number >= total_scenes:
+                return ["අදම ආරම්භ කරන්න!", "වැඩි විස්තර සඳහා Follow කරන්න", "අවසාන තීරණය"]
+            else:
+                return [f"ප්‍රතිලාභ #{scene_number}", "වේගවත් දියුණුවක්", "විශිෂ්ට ප්‍රතිඵල"]
+        else:
+            upper_topic = clean_topic.upper()[:25]
+            if scene_number == 1:
+                return [f"WHY {upper_topic}?", "THE BIG SECRET", "DON'T MISS THIS"]
+            elif scene_number >= total_scenes:
+                return ["TRY IT TODAY!", "FOLLOW FOR MORE", "KEY TAKEAWAY"]
+            else:
+                return [f"BENEFIT #{scene_number}", "GAME CHANGER", "EASY TO IMPLEMENT"]
+
 
 class OpenAITextProvider(BaseTextProvider):
     """OpenAI API integration for caption and copy generation."""
@@ -276,5 +308,44 @@ class OpenAITextProvider(BaseTextProvider):
             logger.error(f"OpenAI narration generation failed: {e}. Falling back to MockTextProvider.")
             fallback = MockTextProvider()
             return fallback.generate_narration(topic, language=lang, duration_hint=dur)
+
+    def suggest_scene_texts(
+        self,
+        topic: str,
+        scene_number: int = 1,
+        total_scenes: int = 5,
+        language: str = "english",
+    ) -> List[str]:
+        lang = _normalize_language(language)
+        lang_prompt = {
+            "tamil": "Suggest 2-3 short, punchy visual keywords/phrases in Tamil script (தமிழ்) (3-5 words each).",
+            "sinhala": "Suggest 2-3 short, punchy visual keywords/phrases in Sinhala script (සිංහල) (3-5 words each).",
+            "english": "Suggest 2-3 short, punchy visual keywords/phrases in uppercase English (3-5 words each).",
+        }
+        try:
+            import openai
+            client = openai.OpenAI(api_key=self.api_key)
+            prompt = (
+                f"Topic: {topic}\n"
+                f"Scene {scene_number} of {total_scenes} in a short social video reel.\n"
+                f"{lang_prompt[lang]}\n"
+                f"These will be bold text overlays on the video slide.\n"
+                f"Return ONLY the phrases, one per line, no numbering, no bullets, no quotes."
+            )
+            resp = client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=100,
+            )
+            lines = [
+                line.strip().strip('"').strip("'")
+                for line in (resp.choices[0].message.content or "").splitlines()
+                if line.strip()
+            ]
+            return lines[:3] if lines else MockTextProvider().suggest_scene_texts(topic, scene_number, total_scenes, language=lang)
+        except Exception as e:
+            logger.error(f"OpenAI text suggestion failed: {e}. Falling back to MockTextProvider.")
+            return MockTextProvider().suggest_scene_texts(topic, scene_number, total_scenes, language=lang)
+
 
 
