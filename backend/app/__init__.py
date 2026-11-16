@@ -2,12 +2,19 @@
 import os
 import structlog
 from flask import Flask
+from pathlib import Path
 from dotenv import load_dotenv
+
+_backend_dir = Path(__file__).resolve().parent.parent
+for _env_candidate in [Path.cwd() / ".env", _backend_dir / ".env", _backend_dir.parent / ".env"]:
+    if _env_candidate.is_file():
+        load_dotenv(_env_candidate)
+        break
+else:
+    load_dotenv()
 
 from .extensions import db, migrate, login_manager, csrf, limiter
 from config import config_map
-
-load_dotenv()
 
 logger = structlog.get_logger(__name__)
 
