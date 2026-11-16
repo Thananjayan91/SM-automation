@@ -110,17 +110,18 @@ def get_zoompan_filter(anim: str, width: int, height: int, d_frames: int, fps: i
     w2 += w2 % 2
     h2 = int(height * 1.15)
     h2 += h2 % 2
+    d_frames = max(1, d_frames)
 
     if anim == "zoom_in":
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='min(zoom+0.0015,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"zoompan=z='min(1.0 + 0.15*(on/{d_frames}), 1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
             f"d=1:s={width}x{height}:fps={fps}"
         )
     elif anim == "zoom_out":
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='if(eq(on,1),1.15,max(zoom-0.0015,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"zoompan=z='max(1.15 - 0.15*(on/{d_frames}), 1.0)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
             f"d=1:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_left":
@@ -150,7 +151,7 @@ def get_zoompan_filter(anim: str, width: int, height: int, d_frames: int, fps: i
     elif anim == "ken_burns":
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='min(zoom+0.0012,1.14)':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
+            f"zoompan=z='min(1.0 + 0.14*(on/{d_frames}), 1.14)':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
             f"d=1:s={width}x{height}:fps={fps}"
         )
     else:  # static
@@ -208,7 +209,7 @@ def build_slideshow_video(
 
         zp_filter = get_zoompan_filter(img_anim, width, height, d_frames, fps=fps)
 
-        if text_anim == "fade_in" and full_path and base_path:
+        if text_anim in ("fade_in", "slide_up", "pop_in") and full_path and base_path:
             # Two inputs: base (background) and full (foreground with text fading in)
             in_base = input_idx
             cmd.extend(["-loop", "1", "-t", f"{per_img_duration:.2f}", "-i", base_path])
@@ -223,7 +224,7 @@ def build_slideshow_video(
 
             filter_parts.append(f"[{in_base}:v]{zp_filter},format=yuv420p,setsar=1[bg{i}]")
             filter_parts.append(
-                f"[{in_full}:v]{zp_filter},fade=t=in:st={fade_st:.2f}:d={fade_dur:.2f}:alpha=1,format=yuv420p,setsar=1[fg{i}]"
+                f"[{in_full}:v]{zp_filter},format=yuva420p,fade=t=in:st={fade_st:.2f}:d={fade_dur:.2f}:alpha=1,setsar=1[fg{i}]"
             )
             filter_parts.append(f"[bg{i}][fg{i}]overlay=0:0:format=auto,format=yuv420p,setsar=1[v{i}]")
         else:

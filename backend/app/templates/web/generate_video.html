@@ -331,7 +331,7 @@
                             <div class="row g-2">
                                 <div class="col-6">
                                     <label class="form-label property-group-title">Image Motion</label>
-                                    <select class="form-select form-select-sm" id="scene-image-anim" onchange="SceneEditor.updateActiveTextFromControls()">
+                                    <select class="form-select form-select-sm" id="scene-image-anim" onchange="SceneEditor.onSceneAnimationChange()">
                                         <option value="zoom_in" selected>Zoom In (1.0x → 1.15x)</option>
                                         <option value="zoom_out">Zoom Out (1.15x → 1.0x)</option>
                                         <option value="pan_left">Pan Left</option>
@@ -344,7 +344,7 @@
                                 </div>
                                 <div class="col-6">
                                     <label class="form-label property-group-title">Text Animation</label>
-                                    <select class="form-select form-select-sm" id="scene-text-anim" onchange="SceneEditor.updateActiveTextFromControls()">
+                                    <select class="form-select form-select-sm" id="scene-text-anim" onchange="SceneEditor.onSceneAnimationChange()">
                                         <option value="fade_in" selected>Fade In (Smooth)</option>
                                         <option value="none">Immediate (None)</option>
                                     </select>

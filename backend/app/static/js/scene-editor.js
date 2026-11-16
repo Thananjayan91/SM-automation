@@ -356,9 +356,26 @@ window.SceneEditor = (function () {
         };
     }
 
+    function onSceneAnimationChange() {
+        const curScene = scenes[activeSceneIndex];
+        if (!curScene) return;
+        const imgAnim = document.getElementById("scene-image-anim");
+        if (imgAnim) curScene.imageAnimation = imgAnim.value;
+        const textAnim = document.getElementById("scene-text-anim");
+        if (textAnim) curScene.textAnimation = textAnim.value;
+    }
+
     function updateActiveTextFromControls() {
         const curScene = scenes[activeSceneIndex];
-        if (!curScene || activeTextIndex < 0 || !curScene.texts[activeTextIndex]) return;
+        if (!curScene) return;
+
+        // Always sync scene animations
+        const imgAnim = document.getElementById("scene-image-anim");
+        if (imgAnim) curScene.imageAnimation = imgAnim.value;
+        const textAnim = document.getElementById("scene-text-anim");
+        if (textAnim) curScene.textAnimation = textAnim.value;
+
+        if (activeTextIndex < 0 || !curScene.texts[activeTextIndex]) return;
 
         const item = curScene.texts[activeTextIndex];
         pullControlsIntoText(item);
@@ -604,6 +621,7 @@ window.SceneEditor = (function () {
         addText,
         deleteActiveText,
         updateActiveTextFromControls,
+        onSceneAnimationChange,
         applyTemplateToCurrent,
         applyTemplateToAllScenes,
         autoSuggestText,

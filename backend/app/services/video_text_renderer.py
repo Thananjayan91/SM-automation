@@ -198,7 +198,7 @@ SYSTEM_PRESET_TEMPLATES = [
                 "max_width_percent": 90,
                 "text_align": "center",
             },
-            "text_animation": "slide_up",
+            "text_animation": "fade_in",
             "image_animation": "zoom_out",
         },
     },
