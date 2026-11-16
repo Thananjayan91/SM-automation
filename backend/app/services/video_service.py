@@ -13,7 +13,7 @@ from flask import current_app
 from ..models.media_asset import MediaAsset
 from .media_service import save_video_file, read_voiceover_audio
 from .security_service import validate_url_safe
-from .video_text_renderer import composite_scene
+from .video_text_renderer import composite_scene, render_text_overlay_layer
 
 logger = logging.getLogger(__name__)
 
@@ -103,59 +103,67 @@ def download_image_to_file(image_url: str, dest_path: str, timeout: int = 12) ->
 
 
 def get_zoompan_filter(anim: str, width: int, height: int, d_frames: int, fps: int = 25) -> str:
-    """Generate FFmpeg zoompan filter string for image animation presets."""
+    """Generate FFmpeg zoompan filter string for image animation presets.
+
+    Operates on a still image (1-frame input) and generates d_frames output frames.
+    The input image is pre-scaled to 1.5x (e.g. 1080x1920) so the output downsamples
+    to s=widthxheight with bicubic filtering, completely eliminating subpixel
+    rounding jitter/vibration.
+    """
     anim = (anim or "static").lower().strip()
-    # Optimized pre-scale: 1.15x is sufficient for 1.15x zoom and renders 4x faster than 2x
-    w2 = int(width * 1.15)
-    w2 += w2 % 2
-    h2 = int(height * 1.15)
-    h2 += h2 % 2
     d_frames = max(1, d_frames)
+    w2 = int(width * 1.5)
+    w2 += w2 % 2
+    h2 = int(height * 1.5)
+    h2 += h2 % 2
 
     if anim == "zoom_in":
+        step = f"{0.15 / d_frames:.6f}"
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='min(1.0 + 0.15*(on/{d_frames}), 1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-            f"d=1:s={width}x{height}:fps={fps}"
+            f"zoompan=z='min(zoom+{step},1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "zoom_out":
+        step = f"{0.15 / d_frames:.6f}"
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='max(1.15 - 0.15*(on/{d_frames}), 1.0)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
-            f"d=1:s={width}x{height}:fps={fps}"
+            f"zoompan=z='if(eq(on,1),1.15,max(zoom-{step},1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_left":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='(iw-iw/zoom)*(1-on/{d_frames})':y='ih/2-(ih/zoom/2)':"
-            f"d=1:s={width}x{height}:fps={fps}"
+            f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_right":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
-            f"d=1:s={width}x{height}:fps={fps}"
+            f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_up":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(1-on/{d_frames})':"
-            f"d=1:s={width}x{height}:fps={fps}"
+            f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_down":
         return (
             f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(on/{d_frames})':"
-            f"d=1:s={width}x{height}:fps={fps}"
+            f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "ken_burns":
+        step = f"{0.14 / d_frames:.6f}"
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='min(1.0 + 0.14*(on/{d_frames}), 1.14)':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
-            f"d=1:s={width}x{height}:fps={fps}"
+            f"zoompan=z='min(zoom+{step},1.14)':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
+            f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     else:  # static
-        return f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+        return f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},loop=loop={d_frames}:size=1:start=0"
 
 
 def build_slideshow_video(
@@ -205,18 +213,19 @@ def build_slideshow_video(
         img_anim = scene.get("image_animation", "static")
         text_anim = scene.get("text_animation", "none")
         base_path = scene.get("base_path")
-        full_path = scene.get("full_path")
+        text_path = scene.get("text_path") or scene.get("full_path")
 
         zp_filter = get_zoompan_filter(img_anim, width, height, d_frames, fps=fps)
 
-        if text_anim in ("fade_in", "slide_up", "pop_in") and full_path and base_path:
-            # Two inputs: base (background) and full (foreground with text fading in)
-            in_base = input_idx
-            cmd.extend(["-loop", "1", "-t", f"{per_img_duration:.2f}", "-i", base_path])
-            input_idx += 1
+        # Single still image input (1 frame); zoompan or loop expands to d_frames
+        cmd.extend(["-i", base_path])
+        in_base = input_idx
+        input_idx += 1
 
-            in_full = input_idx
-            cmd.extend(["-loop", "1", "-t", f"{per_img_duration:.2f}", "-i", full_path])
+        if text_path and text_anim in ("fade_in", "slide_up", "pop_in"):
+            # Two inputs: base (moving image) + transparent text overlay fading in
+            in_text = input_idx
+            cmd.extend(["-loop", "1", "-t", f"{per_img_duration:.2f}", "-i", text_path])
             input_idx += 1
 
             fade_st = min(0.3, per_img_duration * 0.15)
@@ -224,17 +233,21 @@ def build_slideshow_video(
 
             filter_parts.append(f"[{in_base}:v]{zp_filter},format=yuv420p,setsar=1[bg{i}]")
             filter_parts.append(
-                f"[{in_full}:v]{zp_filter},format=yuva420p,fade=t=in:st={fade_st:.2f}:d={fade_dur:.2f}:alpha=1,setsar=1[fg{i}]"
+                f"[{in_text}:v]format=yuva420p,fade=t=in:st={fade_st:.2f}:d={fade_dur:.2f}:alpha=1,setsar=1[fg{i}]"
             )
             filter_parts.append(f"[bg{i}][fg{i}]overlay=0:0:format=auto,format=yuv420p,setsar=1[v{i}]")
-        else:
-            # Single input: use full_path if available (text burned in), otherwise base_path
-            chosen_path = full_path if full_path else base_path
-            in_img = input_idx
-            cmd.extend(["-loop", "1", "-t", f"{per_img_duration:.2f}", "-i", chosen_path])
+        elif text_path:
+            # Static text overlay over moving background
+            in_text = input_idx
+            cmd.extend(["-loop", "1", "-t", f"{per_img_duration:.2f}", "-i", text_path])
             input_idx += 1
 
-            filter_parts.append(f"[{in_img}:v]{zp_filter},format=yuv420p,setsar=1[v{i}]")
+            filter_parts.append(f"[{in_base}:v]{zp_filter},format=yuv420p,setsar=1[bg{i}]")
+            filter_parts.append(f"[{in_text}:v]format=yuva420p,setsar=1[fg{i}]")
+            filter_parts.append(f"[bg{i}][fg{i}]overlay=0:0:format=auto,format=yuv420p,setsar=1[v{i}]")
+        else:
+            # Single input: base with motion
+            filter_parts.append(f"[{in_base}:v]{zp_filter},format=yuv420p,setsar=1[v{i}]")
 
         concat_inputs.append(f"[v{i}]")
 
@@ -339,15 +352,36 @@ def generate_video_from_assets(
         if duration <= 1.0:
             duration = max(5.0, len(scenes) * 3.0)
 
-        # 3. Download images and prepare scenes
-        prepared_scenes: List[Dict[str, Any]] = []
-        for idx, sc in enumerate(scenes[:8]):  # Max 8 scenes for safety
-            url = sc.get("image_url")
-            if not url:
-                continue
+        # 3. Download images in parallel
+        from concurrent.futures import ThreadPoolExecutor
 
+        valid_scenes = [sc for sc in scenes[:8] if sc.get("image_url")]
+        raw_image_paths: Dict[int, str] = {}
+
+        def _download_task(idx_sc):
+            idx, sc = idx_sc
+            url = sc.get("image_url")
             local_raw = os.path.join(temp_dir, f"raw_{idx:03d}.jpg")
-            if not download_image_to_file(url, local_raw):
+            if download_image_to_file(url, local_raw):
+                return idx, local_raw
+            return idx, None
+
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(valid_scenes)))) as executor:
+            for idx, local_path in executor.map(_download_task, enumerate(valid_scenes)):
+                if local_path:
+                    raw_image_paths[idx] = local_path
+
+        # Pre-scale base image to 1.5x of target dimensions (e.g. 1080x1920)
+        # This provides high subpixel resolution for smooth Ken Burns zoompan downsampling
+        base_w = int(target_w * 1.5)
+        base_w += base_w % 2
+        base_h = int(target_h * 1.5)
+        base_h += base_h % 2
+
+        prepared_scenes: List[Dict[str, Any]] = []
+        for idx, sc in enumerate(valid_scenes):
+            local_raw = raw_image_paths.get(idx)
+            if not local_raw or not os.path.isfile(local_raw):
                 continue
 
             with open(local_raw, "rb") as rf:
@@ -357,22 +391,23 @@ def generate_video_from_assets(
             img_anim = sc.get("image_animation", "zoom_in")
             text_anim = sc.get("text_animation", "fade_in" if texts else "none")
 
-            # Composite base image (cover cropped to aspect ratio)
+            # Composite clean base image at 1.5x (NO text burned in)
             base_png_path = os.path.join(temp_dir, f"scene_{idx:03d}_base.png")
-            base_bytes = composite_scene(raw_bytes, texts=None, canvas_w=target_w, canvas_h=target_h)
+            base_bytes = composite_scene(raw_bytes, texts=None, canvas_w=base_w, canvas_h=base_h)
             with open(base_png_path, "wb") as bf:
                 bf.write(base_bytes)
 
-            full_png_path = None
+            # Render crisp transparent text overlay layer at native target resolution
+            text_png_path = None
             if texts:
-                full_png_path = os.path.join(temp_dir, f"scene_{idx:03d}_full.png")
-                full_bytes = composite_scene(raw_bytes, texts=texts, canvas_w=target_w, canvas_h=target_h)
-                with open(full_png_path, "wb") as ff:
-                    ff.write(full_bytes)
+                text_png_path = os.path.join(temp_dir, f"scene_{idx:03d}_text.png")
+                overlay_img = render_text_overlay_layer(canvas_w=target_w, canvas_h=target_h, texts=texts)
+                overlay_img.save(text_png_path, format="PNG")
 
             prepared_scenes.append({
                 "base_path": base_png_path,
-                "full_path": full_png_path,
+                "text_path": text_png_path,
+                "full_path": text_png_path,  # Backwards compatibility
                 "image_animation": img_anim,
                 "text_animation": text_anim,
             })
