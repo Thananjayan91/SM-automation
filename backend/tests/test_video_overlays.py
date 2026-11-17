@@ -284,6 +284,48 @@ class TestVideoTemplatesAPI:
         assert len(data["suggestions"]) >= 2
         assert data["scene_number"] == 1
 
+    def test_extract_narration_phrases_endpoint(self, client, db):
+        user = create_user("test_phrases@example.com")
+        tenant = create_tenant("Phrases Workspace", owner=user)
+        db.session.commit()
+
+        with client.session_transaction() as sess:
+            sess["_user_id"] = user.id
+            sess["active_tenant_id"] = tenant.id
+
+        script = "Discover the ancient wonders of Rome. Walk through the Colosseum. Taste authentic pasta today."
+        resp = client.post("/api/v1/video/extract-narration-phrases", json={
+            "script": script,
+            "scene_count": 3,
+            "language": "english"
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert "phrases" in data
+        assert len(data["phrases"]) >= 3
+        assert "scene_assignments" in data
+
+    def test_extract_narration_phrases_tamil_sinhala(self, client, db):
+        user = create_user("test_phrases_ta@example.com")
+        tenant = create_tenant("Phrases TA Workspace", owner=user)
+        db.session.commit()
+
+        with client.session_transaction() as sess:
+            sess["_user_id"] = user.id
+            sess["active_tenant_id"] = tenant.id
+
+        ta_script = "காலை எழுந்தவுடன் உடற்பயிற்சி செய்யுங்கள். தூய நீர் குடியுங்கள். ஆரோக்கியமாக வாழுங்கள்."
+        resp = client.post("/api/v1/video/extract-narration-phrases", json={
+            "script": ta_script,
+            "scene_count": 3,
+            "language": "tamil"
+        })
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert len(data["phrases"]) >= 2
+
 
 class TestVideoRenderWithScenes:
     """Test /api/v1/video/render with enhanced scenes payload."""

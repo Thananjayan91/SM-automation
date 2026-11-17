@@ -126,6 +126,10 @@ class TestVideoAPIEndpoints:
         data = resp.get_json()
         assert "voices" in data
         assert any(v["id"] == "nova" for v in data["voices"])
+        assert any(v["id"] == "ta-pallavi" for v in data["voices"])
+        assert any(v["id"] == "ta-saranya" for v in data["voices"])
+        assert any(v["id"] == "si-thilini" for v in data["voices"])
+        assert any(v["id"] == "si-sameera" for v in data["voices"])
 
     def test_video_narration_endpoint(self, client, db):
         user = create_user("test_video_narration@example.com")

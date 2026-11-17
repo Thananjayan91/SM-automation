@@ -1,6 +1,6 @@
 """Text and caption generation provider."""
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from .base import BaseTextProvider, CaptionResult, NarrationResult
 
@@ -163,9 +163,17 @@ class MockTextProvider(BaseTextProvider):
         scene_number: int = 1,
         total_scenes: int = 5,
         language: str = "english",
+        script: Optional[str] = None,
     ) -> List[str]:
         lang = _normalize_language(language)
         clean_topic = topic.strip()
+        if script and len(script.strip()) > 10:
+            extracted = self.extract_phrases_from_narration(script, topic=clean_topic, total_scenes=total_scenes, language=lang)
+            phrases = extracted.get("all_phrases") or []
+            if phrases:
+                start = (scene_number - 1) % len(phrases)
+                return phrases[start:start + 3] if len(phrases) >= start + 3 else (phrases[start:] + phrases[:3])[:3]
+
         if lang == "tamil":
             if scene_number == 1:
                 return [f"{clean_topic} — சிறப்பம்சம்", "முக்கிய தகவல்", "இன்றே தெரிந்து கொள்ளுங்கள்"]
@@ -188,6 +196,86 @@ class MockTextProvider(BaseTextProvider):
                 return ["TRY IT TODAY!", "FOLLOW FOR MORE", "KEY TAKEAWAY"]
             else:
                 return [f"BENEFIT #{scene_number}", "GAME CHANGER", "EASY TO IMPLEMENT"]
+
+    def extract_phrases_from_narration(
+        self,
+        script: str,
+        topic: str = "",
+        total_scenes: int = 4,
+        language: str = "english",
+    ) -> Dict[str, Any]:
+        """Extract or generate attractive keywords and scene phrases from a narration script."""
+        lang = _normalize_language(language)
+        clean_topic = topic.strip()
+        phrases = []
+
+        clean_script = (script or "").strip()
+        if clean_script:
+            import re
+            sentences = [s.strip() for s in re.split(r"[.!?\n]+", clean_script) if len(s.strip()) > 3]
+            for s in sentences[:8]:
+                words = s.split()
+                if len(words) <= 5:
+                    phrase = " ".join(words)
+                else:
+                    phrase = " ".join(words[:4])
+                phrase = re.sub(r'["\',;:()]+', '', phrase).strip()
+                if phrase and len(phrase) > 2 and phrase not in phrases:
+                    phrases.append(phrase.upper() if lang == "english" else phrase)
+
+        if lang == "tamil":
+            default_pool = [
+                f"{clean_topic} — முக்கிய தகவல்",
+                "அற்புதமான நன்மைகள்",
+                "வேகமான முடிவுகள்",
+                "இயற்கையான வழிமுறை",
+                "ஆரோக்கியமான வாழ்க்கை",
+                "இன்றே முயற்சி செய்யுங்கள்!",
+                "பயனுள்ள குறிப்புகள்",
+                "மேலும் அறிய பின்தொடருங்கள்",
+            ]
+        elif lang == "sinhala":
+            default_pool = [
+                f"{clean_topic} — විශේෂ කරුණු",
+                "විශිෂ්ට ප්‍රතිඵල",
+                "වේගවත් දියුණුවක්",
+                "ස්වාභාවික ක්‍රමවේදය",
+                "නිරෝගී ජීවිතයක්",
+                "අදම උත්සාහ කරන්න!",
+                "වැදගත් උපදෙස්",
+                "වැඩි විස්තර සඳහා Follow කරන්න",
+            ]
+        else:
+            upper_t = clean_topic.upper()[:25] if clean_topic else "THIS"
+            default_pool = [
+                f"WHY {upper_t}?",
+                "THE BIG BENEFIT",
+                "HOW IT WORKS",
+                "KEY TAKEAWAY",
+                "GAME CHANGER",
+                "PRO TIP",
+                "EASY TO START",
+                "TRY IT TODAY!",
+            ]
+
+        for p in default_pool:
+            if p not in phrases:
+                phrases.append(p)
+
+        scene_phrases = {}
+        for s_idx in range(1, total_scenes + 1):
+            if s_idx == 1:
+                scene_phrases[str(s_idx)] = phrases[0] if phrases else default_pool[0]
+            elif s_idx >= total_scenes:
+                scene_phrases[str(s_idx)] = default_pool[-1]
+            else:
+                p_idx = min(s_idx - 1, len(phrases) - 1)
+                scene_phrases[str(s_idx)] = phrases[p_idx] if p_idx < len(phrases) else default_pool[min(s_idx, len(default_pool) - 1)]
+
+        return {
+            "all_phrases": phrases[:10],
+            "scene_phrases": scene_phrases,
+        }
 
 
 class OpenAITextProvider(BaseTextProvider):
@@ -315,8 +403,17 @@ class OpenAITextProvider(BaseTextProvider):
         scene_number: int = 1,
         total_scenes: int = 5,
         language: str = "english",
+        script: Optional[str] = None,
     ) -> List[str]:
         lang = _normalize_language(language)
+        fallback = MockTextProvider()
+        if script and len(script.strip()) > 10:
+            extracted = self.extract_phrases_from_narration(script, topic=topic, total_scenes=total_scenes, language=lang)
+            phrases = extracted.get("all_phrases") or []
+            if phrases:
+                start = (scene_number - 1) % len(phrases)
+                return phrases[start:start + 3] if len(phrases) >= start + 3 else (phrases[start:] + phrases[:3])[:3]
+
         lang_prompt = {
             "tamil": "Suggest 2-3 short, punchy visual keywords/phrases in Tamil script (தமிழ்) (3-5 words each).",
             "sinhala": "Suggest 2-3 short, punchy visual keywords/phrases in Sinhala script (සිංහල) (3-5 words each).",
@@ -342,10 +439,66 @@ class OpenAITextProvider(BaseTextProvider):
                 for line in (resp.choices[0].message.content or "").splitlines()
                 if line.strip()
             ]
-            return lines[:3] if lines else MockTextProvider().suggest_scene_texts(topic, scene_number, total_scenes, language=lang)
+            return lines[:3] if lines else fallback.suggest_scene_texts(topic, scene_number, total_scenes, language=lang)
         except Exception as e:
             logger.error(f"OpenAI text suggestion failed: {e}. Falling back to MockTextProvider.")
-            return MockTextProvider().suggest_scene_texts(topic, scene_number, total_scenes, language=lang)
+            return fallback.suggest_scene_texts(topic, scene_number, total_scenes, language=lang)
+
+    def extract_phrases_from_narration(
+        self,
+        script: str,
+        topic: str = "",
+        total_scenes: int = 4,
+        language: str = "english",
+    ) -> Dict[str, Any]:
+        """Extract attractive keywords and scene phrases from a narration script using OpenAI."""
+        lang = _normalize_language(language)
+        fallback = MockTextProvider()
+        if not self.api_key:
+            return fallback.extract_phrases_from_narration(script, topic, total_scenes, language=lang)
+
+        lang_instructions = {
+            "tamil": "Extract 6-8 short, attractive keywords or phrases in Tamil script (தமிழ்) (2-5 words each).",
+            "sinhala": "Extract 6-8 short, attractive keywords or phrases in Sinhala script (සිංහල) (2-5 words each).",
+            "english": "Extract 6-8 short, attractive keywords or phrases in UPPERCASE English (2-4 words each).",
+        }
+
+        prompt = (
+            f"Topic: {topic}\n"
+            f"Narration Script:\n\"{script}\"\n\n"
+            f"{lang_instructions[lang]}\n"
+            f"These phrases will be placed as bold, punchy text overlays on video slides.\n"
+            f"Each phrase should capture a key insight, benefit, hook, or call to action.\n"
+            f"Return ONLY the phrases, one per line, no numbering, no bullet points, no quotes."
+        )
+
+        try:
+            import openai
+            client = openai.OpenAI(api_key=self.api_key)
+            resp = client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=150,
+            )
+            raw_lines = [
+                line.strip().strip('"').strip("'").lstrip("-*123456789. ")
+                for line in (resp.choices[0].message.content or "").splitlines()
+                if line.strip()
+            ]
+            phrases = raw_lines if raw_lines else fallback.extract_phrases_from_narration(script, topic, total_scenes, language=lang)["all_phrases"]
+
+            scene_phrases = {}
+            for s_idx in range(1, total_scenes + 1):
+                p_idx = s_idx - 1
+                scene_phrases[str(s_idx)] = phrases[p_idx % len(phrases)] if phrases else f"SCENE {s_idx}"
+
+            return {
+                "all_phrases": phrases[:10],
+                "scene_phrases": scene_phrases,
+            }
+        except Exception as e:
+            logger.error(f"OpenAI phrase extraction failed: {e}. Using fallback.")
+            return fallback.extract_phrases_from_narration(script, topic, total_scenes, language=lang)
 
 
 

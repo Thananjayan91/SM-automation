@@ -10,6 +10,8 @@ window.SceneEditor = (function () {
     let activeTextIndex = -1;
     let availableTemplates = [];
     let currentAspectRatio = "9:16";
+    let narrationPhrases = [];
+    let scenePhrasesMap = {};
 
     // Canvas display dimensions by aspect ratio
     const CANVAS_DIMS = {
@@ -78,6 +80,7 @@ window.SceneEditor = (function () {
         loadTemplates();
         renderSceneTabs();
         loadScene(0);
+        fetchNarrationPhrases(true);
     }
 
     async function loadTemplates() {
@@ -508,8 +511,9 @@ window.SceneEditor = (function () {
 
     async function autoSuggestText() {
         const topic = document.getElementById("video-topic") ? document.getElementById("video-topic").value.trim() : "";
-        if (!topic) {
-            alert("Please enter a topic in Step 1 first.");
+        const script = document.getElementById("narration-script") ? document.getElementById("narration-script").value.trim() : "";
+        if (!topic && !script) {
+            alert("Please enter a topic or generate a narration script in Step 1 first.");
             return;
         }
 
@@ -524,6 +528,7 @@ window.SceneEditor = (function () {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     topic,
+                    script,
                     scene_number: activeSceneIndex + 1,
                     total_scenes: scenes.length,
                     language
@@ -535,12 +540,170 @@ window.SceneEditor = (function () {
                 const suggested = data.suggestions[0];
                 setVal("text-content-input", suggested);
                 updateActiveTextFromControls();
+
+                // Merge into narrationPhrases so it appears in the bottom clickable list
+                data.suggestions.forEach((s) => {
+                    if (s && !narrationPhrases.includes(s)) {
+                        narrationPhrases.unshift(s);
+                    }
+                });
+                renderPhraseChips();
             }
         } catch (err) {
             alert("Could not fetch AI text suggestions.");
         } finally {
             if (btn) btn.disabled = false;
         }
+    }
+
+    async function fetchNarrationPhrases(autoAssign = false) {
+        const topic = document.getElementById("video-topic") ? document.getElementById("video-topic").value.trim() : "";
+        const script = document.getElementById("narration-script") ? document.getElementById("narration-script").value.trim() : "";
+        const langRadio = document.querySelector('input[name="video-lang"]:checked');
+        const language = langRadio ? langRadio.value : "english";
+
+        if (!topic && !script) {
+            renderPhraseChips();
+            return;
+        }
+
+        const box = document.getElementById("phrase-chips-container");
+        if (box && narrationPhrases.length === 0) {
+            box.innerHTML = '<span class="text-muted small fst-italic" style="font-size:0.75rem;"><span class="spinner-border spinner-border-sm me-1" style="width:10px;height:10px;"></span>Extracting keywords from narration...</span>';
+        }
+
+        try {
+            const resp = await fetch("/api/v1/video/extract-narration-phrases", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    script,
+                    topic,
+                    total_scenes: scenes.length || 4,
+                    language
+                })
+            });
+            const data = await resp.json();
+            if (data.all_phrases && data.all_phrases.length > 0) {
+                narrationPhrases = data.all_phrases;
+                scenePhrasesMap = data.scene_phrases || {};
+
+                if (autoAssign && scenes.length > 0) {
+                    scenes.forEach((sc, idx) => {
+                        const sNum = String(idx + 1);
+                        const assigned = scenePhrasesMap[sNum] || narrationPhrases[idx % narrationPhrases.length];
+                        if (assigned && sc.texts && sc.texts.length > 0) {
+                            const cur = (sc.texts[0].content || "").trim();
+                            if (!cur || cur.startsWith("HEADLINE") || cur.startsWith("POINT #") || cur === "NEW CAPTION") {
+                                sc.texts[0].content = assigned;
+                            }
+                        }
+                    });
+                    loadScene(activeSceneIndex);
+                }
+            }
+        } catch (err) {
+            console.warn("Could not extract narration phrases:", err);
+        } finally {
+            renderPhraseChips();
+        }
+    }
+
+    function renderPhraseChips() {
+        const container = document.getElementById("phrase-chips-container");
+        if (!container) return;
+
+        if (!narrationPhrases || narrationPhrases.length === 0) {
+            container.innerHTML = '<span class="text-muted small" style="font-size:0.72rem;">No keywords extracted yet. Click <b>AI Suggest</b> or <b>Refresh</b>.</span>';
+            return;
+        }
+
+        const curScene = scenes[activeSceneIndex];
+        const activeText = curScene && activeTextIndex >= 0 ? curScene.texts[activeTextIndex] : (curScene && curScene.texts[0] ? curScene.texts[0] : null);
+        const curContent = activeText ? (activeText.content || "").trim().toUpperCase() : "";
+
+        container.innerHTML = "";
+        narrationPhrases.forEach((phrase) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            const isMatch = curContent && phrase.trim().toUpperCase() === curContent;
+            btn.className = `btn btn-sm py-0 px-2 rounded-pill text-nowrap phrase-chip ${
+                isMatch ? "btn-primary text-white shadow-sm" : "btn-outline-secondary bg-light text-dark"
+            }`;
+            btn.style.fontSize = "0.72rem";
+            btn.style.fontWeight = isMatch ? "600" : "500";
+            btn.innerHTML = isMatch ? `<i class="bi bi-check2 me-1"></i>${phrase}` : phrase;
+            btn.title = `Click to set overlay text to: "${phrase}"`;
+            btn.onclick = () => applyPhraseToCurrentText(phrase);
+            container.appendChild(btn);
+        });
+    }
+
+    function applyPhraseToCurrentText(phrase) {
+        if (!phrase) return;
+        const curScene = scenes[activeSceneIndex];
+        if (!curScene) return;
+
+        if (curScene.texts.length === 0) {
+            addText();
+        }
+
+        const targetText = activeTextIndex >= 0 && curScene.texts[activeTextIndex] ? curScene.texts[activeTextIndex] : curScene.texts[0];
+        if (targetText) {
+            targetText.content = phrase;
+            setVal("text-content-input", phrase);
+            updateActiveTextFromControls();
+            renderPhraseChips();
+        }
+    }
+
+    async function autoFillAllScenesFromNarration() {
+        const btn = document.getElementById("btn-autofill-all-scenes");
+        if (btn) btn.disabled = true;
+        try {
+            await fetchNarrationPhrases(false);
+            if (!narrationPhrases || narrationPhrases.length === 0) {
+                alert("Please make sure you have a topic or narration script in Step 1.");
+                return;
+            }
+
+            scenes.forEach((sc, idx) => {
+                const sNum = String(idx + 1);
+                const assigned = scenePhrasesMap[sNum] || narrationPhrases[idx % narrationPhrases.length];
+                if (assigned) {
+                    if (!sc.texts || sc.texts.length === 0) {
+                        sc.texts = [{
+                            content: assigned,
+                            x_percent: 50,
+                            y_percent: 45,
+                            font_family: "Montserrat",
+                            font_size: 38,
+                            font_weight: "bold",
+                            color: "#FFFFFF",
+                            stroke_color: "#000000",
+                            stroke_width: 2,
+                            shadow: { enabled: true, color: "rgba(0, 0, 0, 0.7)", blur: 8, offsetX: 3, offsetY: 3 },
+                            background: { enabled: false, color: "rgba(0, 0, 0, 0.5)", padding: 12, border_radius: 8 },
+                            max_width_percent: 85,
+                            text_align: "center"
+                        }];
+                    } else {
+                        sc.texts[0].content = assigned;
+                    }
+                }
+            });
+
+            loadScene(activeSceneIndex);
+            renderPhraseChips();
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    function refreshNarrationPhrases() {
+        narrationPhrases = [];
+        scenePhrasesMap = {};
+        fetchNarrationPhrases(false);
     }
 
     async function saveCurrentAsTemplate() {
@@ -625,6 +788,10 @@ window.SceneEditor = (function () {
         applyTemplateToCurrent,
         applyTemplateToAllScenes,
         autoSuggestText,
+        applyPhraseToCurrentText,
+        autoFillAllScenesFromNarration,
+        refreshNarrationPhrases,
+        fetchNarrationPhrases,
         saveCurrentAsTemplate,
         exportScenes
     };

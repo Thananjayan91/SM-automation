@@ -26,17 +26,18 @@ def _get_active_tenant_id() -> tuple[str | None, str | None]:
 @api_v1_bp.route("/video/voices", methods=["GET"])
 @login_required
 def api_list_voices():
-    """List available TTS voice options."""
+    """List available TTS voice options across English, Tamil, and Sinhala."""
+    from ...services.ai.tts_provider import VOICE_CATALOG, DEFAULT_VOICE
+    lang = request.args.get("language", "").strip().lower()
+    if lang:
+        filtered = [v for v in VOICE_CATALOG if v.get("language") == lang]
+        voices = filtered if filtered else VOICE_CATALOG
+    else:
+        voices = VOICE_CATALOG
+
     return jsonify({
-        "voices": [
-            {"id": "nova", "name": "Nova", "gender": "Female", "description": "Warm, engaging, natural (Recommended)"},
-            {"id": "alloy", "name": "Alloy", "gender": "Neutral", "description": "Balanced, versatile, clear"},
-            {"id": "echo", "name": "Echo", "gender": "Male", "description": "Smooth, authoritative, confident"},
-            {"id": "fable", "name": "Fable", "gender": "Expressive", "description": "Dynamic, British accent, storytelling"},
-            {"id": "onyx", "name": "Onyx", "gender": "Male", "description": "Deep, calm, professional"},
-            {"id": "shimmer", "name": "Shimmer", "gender": "Female", "description": "Bright, upbeat, energetic"},
-        ],
-        "default": "nova",
+        "voices": voices,
+        "default": DEFAULT_VOICE,
     })
 
 
@@ -119,8 +120,9 @@ def api_suggest_scene_texts():
 
     data = request.get_json(silent=True) or {}
     topic = (data.get("topic") or "").strip()
-    if not topic:
-        return jsonify({"error": "validation_error", "message": "Topic is required."}), 400
+    script = (data.get("script") or "").strip()
+    if not topic and not script:
+        return jsonify({"error": "validation_error", "message": "Topic or script is required."}), 400
 
     scene_number = int(data.get("scene_number", 1))
     total_scenes = int(data.get("total_scenes", 5))
@@ -128,16 +130,52 @@ def api_suggest_scene_texts():
 
     text_provider = get_text_provider()
     suggestions = text_provider.suggest_scene_texts(
-        topic=topic,
+        topic=topic or script[:30],
         scene_number=scene_number,
         total_scenes=total_scenes,
         language=language,
+        script=script,
     )
 
     return jsonify({
         "suggestions": suggestions,
         "scene_number": scene_number,
         "total_scenes": total_scenes,
+    })
+
+
+@api_v1_bp.route("/video/extract-narration-phrases", methods=["POST"])
+@login_required
+@limiter.limit("20 per minute")
+def api_extract_narration_phrases():
+    """Extract or suggest attractive visual phrases and keywords from the narration script."""
+    tenant_id, err = _get_active_tenant_id()
+    if err:
+        return jsonify({"error": "workspace_required", "message": err}), 403
+
+    data = request.get_json(silent=True) or {}
+    script = (data.get("script") or "").strip()
+    topic = (data.get("topic") or "").strip()
+    total_scenes = int(data.get("total_scenes", 4))
+    language = (data.get("language") or "english").strip().lower()
+
+    text_provider = get_text_provider()
+    result = text_provider.extract_phrases_from_narration(
+        script=script,
+        topic=topic,
+        total_scenes=total_scenes,
+        language=language,
+    )
+
+    all_phrases = result.get("all_phrases", [])
+    scene_phrases = result.get("scene_phrases", {})
+
+    return jsonify({
+        "success": True,
+        "phrases": all_phrases,
+        "scene_assignments": scene_phrases,
+        "all_phrases": all_phrases,
+        "scene_phrases": scene_phrases,
     })
 
 

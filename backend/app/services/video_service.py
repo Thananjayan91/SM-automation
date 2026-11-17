@@ -103,32 +103,21 @@ def download_image_to_file(image_url: str, dest_path: str, timeout: int = 12) ->
 
 
 def get_zoompan_filter(anim: str, width: int, height: int, d_frames: int, fps: int = 25) -> str:
-    """Generate FFmpeg zoompan filter string for image animation presets.
-
-    Operates on a still image (1-frame input) and generates d_frames output frames.
-    The input image is pre-scaled to 1.5x (e.g. 1080x1920) so the output downsamples
-    to s=widthxheight with bicubic filtering, completely eliminating subpixel
-    rounding jitter/vibration.
-    """
+    """Generate FFmpeg zoompan filter string for image animation presets."""
     anim = (anim or "static").lower().strip()
     d_frames = max(1, d_frames)
-    w2 = int(width * 1.5)
-    w2 += w2 % 2
-    h2 = int(height * 1.5)
-    h2 += h2 % 2
+    w2, h2 = width * 2, height * 2
 
     if anim == "zoom_in":
-        step = f"{0.15 / d_frames:.6f}"
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='min(zoom+{step},1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"zoompan=z='min(zoom+0.0015,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "zoom_out":
-        step = f"{0.15 / d_frames:.6f}"
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='if(eq(on,1),1.15,max(zoom-{step},1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"zoompan=z='if(eq(on,1),1.15,max(zoom-0.0015,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_left":
@@ -156,10 +145,9 @@ def get_zoompan_filter(anim: str, width: int, height: int, d_frames: int, fps: i
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "ken_burns":
-        step = f"{0.14 / d_frames:.6f}"
         return (
             f"scale={w2}:{h2},"
-            f"zoompan=z='min(zoom+{step},1.14)':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
+            f"zoompan=z='min(zoom+0.0012,1.14)':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     else:  # static
@@ -371,12 +359,10 @@ def generate_video_from_assets(
                 if local_path:
                     raw_image_paths[idx] = local_path
 
-        # Pre-scale base image to 1.5x of target dimensions (e.g. 1080x1920)
-        # This provides high subpixel resolution for smooth Ken Burns zoompan downsampling
-        base_w = int(target_w * 1.5)
-        base_w += base_w % 2
-        base_h = int(target_h * 1.5)
-        base_h += base_h % 2
+        # Pre-scale base image to 2x of target dimensions (e.g. 1440x2560)
+        # This provides maximum subpixel resolution for smooth Ken Burns zoompan downsampling
+        base_w = target_w * 2
+        base_h = target_h * 2
 
         prepared_scenes: List[Dict[str, Any]] = []
         for idx, sc in enumerate(valid_scenes):

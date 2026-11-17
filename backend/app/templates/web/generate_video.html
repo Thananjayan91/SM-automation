@@ -92,13 +92,13 @@
                         <div class="col-sm-7">
                             <label class="form-label fw-medium small d-block">Narration Language</label>
                             <div class="btn-group w-100" role="group">
-                                <input type="radio" class="btn-check" name="video-lang" id="lang-en" value="english" checked>
+                                <input type="radio" class="btn-check" name="video-lang" id="lang-en" value="english" checked onchange="onLanguageChange('english')">
                                 <label class="btn btn-outline-secondary btn-sm" for="lang-en">English</label>
 
-                                <input type="radio" class="btn-check" name="video-lang" id="lang-ta" value="tamil">
+                                <input type="radio" class="btn-check" name="video-lang" id="lang-ta" value="tamil" onchange="onLanguageChange('tamil')">
                                 <label class="btn btn-outline-secondary btn-sm" for="lang-ta">தமிழ்</label>
 
-                                <input type="radio" class="btn-check" name="video-lang" id="lang-si" value="sinhala">
+                                <input type="radio" class="btn-check" name="video-lang" id="lang-si" value="sinhala" onchange="onLanguageChange('sinhala')">
                                 <label class="btn btn-outline-secondary btn-sm" for="lang-si">සිංහල</label>
                             </div>
                         </div>
@@ -146,12 +146,24 @@
                         <div class="col-sm-6">
                             <label for="tts-voice" class="form-label fw-medium small">Select Voice</label>
                             <select class="form-select form-select-sm" id="tts-voice">
-                                <option value="nova" selected>Nova — Warm &amp; Natural (Recommended)</option>
-                                <option value="alloy">Alloy — Balanced &amp; Clear</option>
-                                <option value="echo">Echo — Smooth &amp; Authoritative</option>
-                                <option value="fable">Fable — Expressive Storytelling</option>
-                                <option value="onyx">Onyx — Deep &amp; Professional</option>
-                                <option value="shimmer">Shimmer — Bright &amp; Upbeat</option>
+                                <optgroup label="Tamil Voices (தமிழ்)">
+                                    <option value="ta-pallavi">Tamil — Pallavi (பெண் - Female, Indian)</option>
+                                    <option value="ta-valluvar">Tamil — Valluvar (ஆண் - Male, Indian)</option>
+                                    <option value="ta-saranya">Tamil (Sri Lanka) — Saranya (பெண் - Female)</option>
+                                    <option value="ta-kumar">Tamil (Sri Lanka) — Kumar (ஆண் - Male)</option>
+                                </optgroup>
+                                <optgroup label="Sinhala Voices (සිංහල)">
+                                    <option value="si-thilini">Sinhala — Thilini (කාන්තා - Female)</option>
+                                    <option value="si-sameera">Sinhala — Sameera (පිරිමි - Male)</option>
+                                </optgroup>
+                                <optgroup label="English Voices (OpenAI TTS)">
+                                    <option value="nova" selected>Nova — Warm &amp; Natural (Recommended)</option>
+                                    <option value="alloy">Alloy — Balanced &amp; Clear</option>
+                                    <option value="echo">Echo — Smooth &amp; Authoritative</option>
+                                    <option value="fable">Fable — Expressive Storytelling</option>
+                                    <option value="onyx">Onyx — Deep &amp; Professional</option>
+                                    <option value="shimmer">Shimmer — Bright &amp; Upbeat</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div class="col-sm-6">
@@ -266,11 +278,31 @@
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <label class="form-label property-group-title mb-0">Overlay Text</label>
-                                    <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;" id="btn-auto-suggest-text" onclick="SceneEditor.autoSuggestText()">
-                                        <i class="bi bi-magic me-1"></i> AI Suggest
-                                    </button>
+                                    <div class="d-flex gap-1">
+                                        <button type="button" class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:0.72rem;" id="btn-autofill-all-scenes" onclick="SceneEditor.autoFillAllScenesFromNarration()" title="Auto-assign punchy narration phrases to all scenes">
+                                            <i class="bi bi-stars me-1"></i> Auto-Fill Scenes
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:0.72rem;" id="btn-auto-suggest-text" onclick="SceneEditor.autoSuggestText()">
+                                            <i class="bi bi-magic me-1"></i> AI Suggest
+                                        </button>
+                                    </div>
                                 </div>
                                 <textarea class="form-control form-control-sm" id="text-content-input" rows="2" placeholder="Text for this slide..." oninput="SceneEditor.updateActiveTextFromControls()"></textarea>
+
+                                <!-- Clickable Keywords & Attractive Phrases from Narration -->
+                                <div class="mt-2 p-2 border rounded bg-white shadow-sm" id="phrase-suggestions-box">
+                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                        <span class="text-secondary fw-semibold" style="font-size:0.72rem;">
+                                            <i class="bi bi-chat-quote-fill text-primary me-1"></i> Click to Apply Narration Keyword:
+                                        </span>
+                                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-muted" style="font-size:0.7rem;" onclick="SceneEditor.refreshNarrationPhrases()" title="Re-fetch keywords from script">
+                                            <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+                                        </button>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-1" id="phrase-chips-container" style="max-height: 96px; overflow-y: auto;">
+                                        <span class="text-muted small fst-italic" style="font-size:0.75rem;">Loading phrases from narration...</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Typography -->
@@ -486,6 +518,22 @@ function updateScriptMeta() {
     document.getElementById('script-meta').textContent = `${words} words · ~${est}s`;
 }
 
+function onLanguageChange(lang) {
+    const voiceSelect = document.getElementById('tts-voice');
+    if (voiceSelect) {
+        if (lang === 'tamil') {
+            voiceSelect.value = 'ta-pallavi';
+        } else if (lang === 'sinhala') {
+            voiceSelect.value = 'si-thilini';
+        } else {
+            voiceSelect.value = 'nova';
+        }
+    }
+    if (window.SceneEditor && typeof SceneEditor.refreshNarrationPhrases === 'function') {
+        SceneEditor.refreshNarrationPhrases();
+    }
+}
+
 function onAspectRatioChange() {
     const ar = document.querySelector('input[name="aspect-ratio"]:checked').value;
     if (selectedImages.length > 0) {
@@ -525,6 +573,11 @@ async function generateNarration() {
         updateScriptMeta();
         document.getElementById('step1-status').textContent = 'Ready';
         document.getElementById('step1-status').className = 'badge bg-success-subtle text-success border border-success-subtle';
+
+        // Auto-fetch attractive overlay phrases from narration script
+        if (window.SceneEditor && typeof SceneEditor.fetchNarrationPhrases === 'function') {
+            SceneEditor.fetchNarrationPhrases(true);
+        }
 
         // Auto-populate Pexels search and trigger search
         const pexelsInput = document.getElementById('pexels-query');

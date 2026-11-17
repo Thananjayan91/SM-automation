@@ -1,7 +1,7 @@
 """Base interfaces and data structures for AI providers."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -92,8 +92,20 @@ class BaseTextProvider(ABC):
         scene_number: int = 1,
         total_scenes: int = 5,
         language: str = "english",
+        script: Optional[str] = None,
     ) -> List[str]:
         """Suggest 2-3 punchy visual text overlay phrases for a video scene."""
+        pass
+
+    @abstractmethod
+    def extract_phrases_from_narration(
+        self,
+        script: str,
+        topic: str = "",
+        total_scenes: int = 4,
+        language: str = "english",
+    ) -> Dict[str, Any]:
+        """Extract or generate attractive keywords and scene phrases from a narration script."""
         pass
 
 
