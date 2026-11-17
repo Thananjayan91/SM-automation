@@ -774,7 +774,19 @@ async function renderVideo() {
                 topic: topic
             })
         });
-        const data = await resp.json();
+        let data;
+        try {
+            data = await resp.json();
+        } catch (jsonErr) {
+            if (resp.status === 504) {
+                errBox.textContent = 'Serverless timeout (504): Video took too long to render on Vercel. Try 15s or 3 scenes.';
+            } else {
+                errBox.textContent = `Server error (${resp.status || 'unknown'}): Video rendering failed.`;
+            }
+            errBox.classList.remove('d-none');
+            return;
+        }
+
         if (!resp.ok || !data.success) {
             errBox.textContent = data.message || 'Video generation failed. Check server logs.';
             errBox.classList.remove('d-none');
@@ -795,7 +807,7 @@ async function renderVideo() {
 
         resBox.classList.remove('d-none');
     } catch (err) {
-        errBox.textContent = 'Request error or timeout while rendering video.';
+        errBox.textContent = 'Network error or timeout while rendering video.';
         errBox.classList.remove('d-none');
     } finally {
         btn.disabled = false;

@@ -484,8 +484,10 @@ def composite_scene(
     texts: Optional[List[Dict[str, Any]]] = None,
     canvas_w: int = 720,
     canvas_h: int = 1280,
+    output_format: str = "PNG",
+    quality: int = 92,
 ) -> bytes:
-    """Take raw base image bytes, crop/scale to target dimensions, overlay visual texts, and return PNG bytes."""
+    """Take raw base image bytes, crop/scale to target dimensions, overlay visual texts, and return image bytes."""
     with Image.open(io.BytesIO(base_image_bytes)) as base_img:
         # Normalize to RGB/RGBA
         base_img = base_img.convert("RGBA")
@@ -498,5 +500,9 @@ def composite_scene(
             final_img = base_cropped.convert("RGB")
 
         out_buf = io.BytesIO()
-        final_img.save(out_buf, format="PNG", optimize=True)
+        fmt = (output_format or "JPEG").upper()
+        if fmt in ("JPEG", "JPG"):
+            final_img.save(out_buf, format="JPEG", quality=quality)
+        else:
+            final_img.save(out_buf, format="PNG")
         return out_buf.getvalue()

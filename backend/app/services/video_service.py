@@ -102,51 +102,43 @@ def download_image_to_file(image_url: str, dest_path: str, timeout: int = 12) ->
         return False
 
 
-def get_zoompan_filter(anim: str, width: int, height: int, d_frames: int, fps: int = 25) -> str:
+def get_zoompan_filter(anim: str, width: int, height: int, d_frames: int, fps: int = 24) -> str:
     """Generate FFmpeg zoompan filter string for image animation presets."""
     anim = (anim or "static").lower().strip()
     d_frames = max(1, d_frames)
-    w2, h2 = width * 2, height * 2
 
     if anim == "zoom_in":
         return (
-            f"scale={w2}:{h2},"
             f"zoompan=z='min(zoom+0.0015,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "zoom_out":
         return (
-            f"scale={w2}:{h2},"
             f"zoompan=z='if(eq(on,1),1.15,max(zoom-0.0015,1.0))':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_left":
         return (
-            f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='(iw-iw/zoom)*(1-on/{d_frames})':y='ih/2-(ih/zoom/2)':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_right":
         return (
-            f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_up":
         return (
-            f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(1-on/{d_frames})':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "pan_down":
         return (
-            f"scale={w2}:{h2},"
             f"zoompan=z='1.12':x='iw/2-(iw/zoom/2)':y='(ih-ih/zoom)*(on/{d_frames})':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
     elif anim == "ken_burns":
         return (
-            f"scale={w2}:{h2},"
             f"zoompan=z='min(zoom+0.0012,1.14)':x='(iw-iw/zoom)*(on/{d_frames})':y='ih/2-(ih/zoom/2)':"
             f"d={d_frames}:s={width}x{height}:fps={fps}"
         )
@@ -188,7 +180,7 @@ def build_slideshow_video(
 
     dur = max(4.0, float(audio_duration))
     per_img_duration = max(1.5, dur / num_scenes)
-    fps = 25
+    fps = 24
     d_frames = max(10, int(round(fps * per_img_duration)))
 
     # Build FFmpeg command inputs and filter graph
@@ -255,6 +247,7 @@ def build_slideshow_video(
         "-map", f"{audio_in_idx}:a",
         "-c:v", "libx264",
         "-preset", "ultrafast",
+        "-threads", "2",
         "-crf", "26",
         "-pix_fmt", "yuv420p",
         "-r", str(fps),
@@ -271,7 +264,7 @@ def build_slideshow_video(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=50,  # Strict timeout to stay well under Vercel's 60s limit
+            timeout=85,
         )
         if proc.returncode != 0:
             logger.error(f"FFmpeg render error: {proc.stderr[-600:]}")
@@ -359,16 +352,20 @@ def generate_video_from_assets(
                 if local_path:
                     raw_image_paths[idx] = local_path
 
-        # Pre-scale base image to 2x of target dimensions (e.g. 1440x2560)
-        # This provides maximum subpixel resolution for smooth Ken Burns zoompan downsampling
-        base_w = target_w * 2
-        base_h = target_h * 2
+        # Base image headroom: 1.25x of target dimensions (e.g. 900x1600 for 9:16)
+        # Provides subpixel clarity for 1.15x zoom with ~2.5x faster encoding and 10x lower I/O
+        base_w = int(round(target_w * 1.25))
+        base_h = int(round(target_h * 1.25))
+        base_w += base_w % 2
+        base_h += base_h % 2
 
-        prepared_scenes: List[Dict[str, Any]] = []
-        for idx, sc in enumerate(valid_scenes):
+        prepared_scenes_dict: Dict[int, Dict[str, Any]] = {}
+
+        def _process_scene_task(idx_sc):
+            idx, sc = idx_sc
             local_raw = raw_image_paths.get(idx)
             if not local_raw or not os.path.isfile(local_raw):
-                continue
+                return idx, None
 
             with open(local_raw, "rb") as rf:
                 raw_bytes = rf.read()
@@ -377,10 +374,10 @@ def generate_video_from_assets(
             img_anim = sc.get("image_animation", "zoom_in")
             text_anim = sc.get("text_animation", "fade_in" if texts else "none")
 
-            # Composite clean base image at 1.5x (NO text burned in)
-            base_png_path = os.path.join(temp_dir, f"scene_{idx:03d}_base.png")
-            base_bytes = composite_scene(raw_bytes, texts=None, canvas_w=base_w, canvas_h=base_h)
-            with open(base_png_path, "wb") as bf:
+            # Composite clean base image as high-quality JPEG
+            base_jpg_path = os.path.join(temp_dir, f"scene_{idx:03d}_base.jpg")
+            base_bytes = composite_scene(raw_bytes, texts=None, canvas_w=base_w, canvas_h=base_h, output_format="JPEG", quality=92)
+            with open(base_jpg_path, "wb") as bf:
                 bf.write(base_bytes)
 
             # Render crisp transparent text overlay layer at native target resolution
@@ -390,13 +387,20 @@ def generate_video_from_assets(
                 overlay_img = render_text_overlay_layer(canvas_w=target_w, canvas_h=target_h, texts=texts)
                 overlay_img.save(text_png_path, format="PNG")
 
-            prepared_scenes.append({
-                "base_path": base_png_path,
+            return idx, {
+                "base_path": base_jpg_path,
                 "text_path": text_png_path,
-                "full_path": text_png_path,  # Backwards compatibility
+                "full_path": text_png_path,
                 "image_animation": img_anim,
                 "text_animation": text_anim,
-            })
+            }
+
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(valid_scenes)))) as executor:
+            for idx, scene_data in executor.map(_process_scene_task, enumerate(valid_scenes)):
+                if scene_data:
+                    prepared_scenes_dict[idx] = scene_data
+
+        prepared_scenes = [prepared_scenes_dict[i] for i in sorted(prepared_scenes_dict.keys())]
 
         if len(prepared_scenes) == 0:
             return None, "Could not download any of the selected images. Please check the URLs."
